@@ -1,21 +1,21 @@
 import express from "express";
 import {
-  registerUser,
-  loginUser,
-  getUserProfile,
-  updateUserProfile,
-  updatePassword,
   addToCart,
-  removeFromCart,
   addToWishlist,
-  removeFromWishlist,
+  deleteUser,
   getAllUsers,
   getUserById,
+  getUserProfile,
+  loginUser,
+  registerUser,
+  removeFromCart,
+  removeFromWishlist,
+  updatePassword,
   updateUser,
-  deleteUser,
+  updateUserProfile,
 } from "../controllers/user.controller";
 
-import { protect, adminOnly } from "../middlewares/auth.middleware";
+import { adminOnly, protect } from "../middlewares/auth.middleware";
 
 const router = express.Router();
 

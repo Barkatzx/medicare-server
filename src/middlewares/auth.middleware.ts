@@ -1,6 +1,5 @@
-import { Request, Response, NextFunction } from "express";
+import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import { User } from "../models/user.model";
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -15,12 +14,11 @@ if (!JWT_SECRET) {
   throw new Error("JWT_SECRET must be defined in environment variables");
 }
 
-// ✅ Middleware: Verify JWT and attach user info to request
 export const protect = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   const authHeader = req.headers.authorization;
 
   if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -38,24 +36,26 @@ export const protect = async (
       };
 
       next();
+      return; // Explicit return after calling next()
     } catch (error) {
       console.error(error);
-      return res.status(401).json({ message: "Invalid or expired token" });
+      res.status(401).json({ message: "Invalid or expired token" });
+      return; // Early return, no returning res object
     }
   } else {
-    return res.status(401).json({ message: "No token provided" });
+    res.status(401).json({ message: "No token provided" });
+    return; // Early return, no returning res object
   }
 };
 
-// ✅ Middleware: Allow only admin users
 export const adminOnly = (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ) => {
   if (req.user?.role !== "admin") {
-    return res.status(403).json({ message: "Access denied: Admins only" });
+    res.status(403).json({ message: "Access denied: Admins only" });
+    return;
   }
-
   next();
 };
