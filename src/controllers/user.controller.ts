@@ -193,42 +193,41 @@ export const addToCart = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { productId, quantity, variantSku } = req.body;
+    const { productId, variantSku, quantity } = req.body;
 
-    // Validate inputs
-    if (!productId || !quantity || !variantSku) {
-      res.status(400).json({
-        message: "Product ID, quantity, and variant SKU are required",
-      });
+    if (!productId || !variantSku || !quantity) {
+      res
+        .status(400)
+        .json({ message: "productId, variantSku, and quantity are required." });
       return;
     }
 
     const user = await User.findById(req.user?.id);
     if (!user) {
-      res.status(404).json({ message: "User not found" });
+      res.status(404).json({ message: "User not found." });
       return;
     }
 
     const product = await Product.findById(productId);
     if (!product || !product.isActive) {
-      res.status(404).json({ message: "Product not found or inactive" });
+      res.status(404).json({ message: "Product not found or inactive." });
       return;
     }
 
     const variant = product.variants.find((v) => v.sku === variantSku);
     if (!variant) {
-      res.status(404).json({ message: "Product variant not found" });
+      res.status(404).json({ message: "Product variant not found." });
       return;
     }
 
     if (!variant.isAvailable || variant.stock < quantity) {
       res
         .status(400)
-        .json({ message: "Insufficient stock for selected variant" });
+        .json({ message: "Variant not available or insufficient stock." });
       return;
     }
 
-    // Check if item already in cart
+    // Check if item is already in cart
     const existingItemIndex = user.cart.findIndex(
       (item) =>
         item.productId.toString() === productId && item.name === variant.name
@@ -238,7 +237,7 @@ export const addToCart = async (
       user.cart[existingItemIndex].quantity += quantity;
     } else {
       user.cart.push({
-        productId,
+        productId: product._id as string,
         name: variant.name,
         quantity,
         price: variant.price,
@@ -246,10 +245,11 @@ export const addToCart = async (
     }
 
     await user.save();
+
     res.status(200).json({ cart: user.cart });
   } catch (error) {
-    console.error("Error adding to cart:", error);
-    res.status(500).json({ message: "Server error" });
+    console.error("Add to cart error:", error);
+    res.status(500).json({ message: "Server error." });
   }
 };
 
