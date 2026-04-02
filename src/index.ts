@@ -1,7 +1,8 @@
 import cors from "cors";
 import dotenv from "dotenv";
-import express, { Request, Response } from "express";
-import { authenticate } from "./middleware/auth.middleware";
+import express from "express";
+import { prisma } from "./config/supabase";
+import userRoutes from "./routes/user.routes";
 
 dotenv.config();
 
@@ -11,21 +12,37 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Example protected route
-app.get(
-  "/api/protected",
-  authenticate,
-  (req: Request & { user?: any }, res: Response) => {
-    res.json({ message: "This is a protected route", user: req.user });
+// Routes
+app.use("/api/users", userRoutes);
+
+// Health check
+app.get("/", (req, res) => {
+  res.status(200).json({ status: "OK", message: "Server is running" });
+});
+
+// Error handling middleware
+app.use(
+  (
+    err: any,
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction,
+  ) => {
+    console.error(err.stack);
+    res.status(500).json({ error: "Something went wrong!" });
   },
 );
 
-// Example public route
-app.get("/api/health", (req, res) => {
-  res.json({ status: "OK", timestamp: new Date() });
+// Start server
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  await prisma.$disconnect();
+  console.log("Disconnected from database");
+  process.exit(0);
 });

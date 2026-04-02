@@ -1,20 +1,50 @@
 import { NextFunction, Request, Response } from "express";
-import { supabase } from "../config/supabase";
+import jwt from "jsonwebtoken";
+import { UserPayload } from "../types";
 
-export const authenticate = async (
-  req: Request,
+export interface AuthRequest extends Request {
+  user?: UserPayload;
+}
+
+export const authenticateToken = async (
+  req: AuthRequest,
   res: Response,
   next: NextFunction,
 ) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "No token provided" });
+  try {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
 
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser(token);
-  if (error || !user) return res.status(401).json({ error: "Invalid token" });
+    if (!token) {
+      return res.status(401).json({ error: "Access token required" });
+    }
 
-  (req as any).user = user;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as UserPayload;
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(403).json({ error: "Invalid or expired token" });
+  }
+};
+
+export const authorizeAdmin = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  if (req.user?.role !== "admin") {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  next();
+};
+
+export const authorizeApproved = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  if (!req.user?.isApproved && req.user?.role !== "admin") {
+    return res.status(403).json({ error: "Account pending approval" });
+  }
   next();
 };
