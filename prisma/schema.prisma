@@ -195,7 +195,6 @@ model OrderItem {
   createdAt DateTime @default(now())
 
   @@index([orderId])
-  @@index([orderId])
   @@index([productId])
 }
 
