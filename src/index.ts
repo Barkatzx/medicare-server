@@ -3,6 +3,9 @@ import dotenv from "dotenv";
 import express from "express";
 import { prisma } from "./config/supabase";
 import userRoutes from "./routes/user.routes";
+import categoryRoutes from "./routes/category.routes";
+import productRoutes from "./routes/product.routes";
+import orderRoutes from "./routes/order.routes";
 
 dotenv.config();
 
@@ -16,6 +19,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use("/api/users", userRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/products", productRoutes);
+app.use("/api/orders", orderRoutes);
 
 // Health check
 app.get("/", (req, res) => {

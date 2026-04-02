@@ -1,0 +1,423 @@
+// src/controllers/product.controller.ts
+import { Request, Response } from "express";
+import { prisma } from "../config/supabase";
+import { AuthRequest } from "../types";
+
+export class ProductController {
+  static async getAllProducts(req: Request, res: Response) {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const skip = (page - 1) * limit;
+      const categoryId = req.query.categoryId as string;
+      const minPrice = parseFloat(req.query.minPrice as string);
+      const maxPrice = parseFloat(req.query.maxPrice as string);
+      const sortBy = (req.query.sortBy as string) || "createdAt";
+      const sortOrder = (req.query.sortOrder as string) || "desc";
+
+      const where: any = {
+        stock: { gt: 0 },
+      };
+
+      if (categoryId) {
+        where.categoryId = categoryId;
+      }
+
+      if (minPrice || maxPrice) {
+        where.price = {};
+        if (minPrice) where.price.gte = minPrice;
+        if (maxPrice) where.price.lte = maxPrice;
+      }
+
+      const orderBy: any = {};
+      orderBy[sortBy] = sortOrder;
+
+      const products = await prisma.product.findMany({
+        where,
+        include: {
+          images: true,
+          category: true,
+        },
+        skip,
+        take: limit,
+        orderBy,
+      });
+
+      const total = await prisma.product.count({ where });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          products,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Get products error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch products",
+      });
+    }
+  }
+
+  static async getProductById(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+
+      const product = await prisma.product.findUnique({
+        where: { id },
+        include: {
+          images: true,
+          category: true,
+        },
+      });
+
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          error: "Product not found",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        data: product,
+      });
+    } catch (error) {
+      console.error("Get product error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch product",
+      });
+    }
+  }
+
+  static async searchProducts(req: Request, res: Response) {
+    try {
+      const { q } = req.query;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const skip = (page - 1) * limit;
+
+      if (!q || typeof q !== "string") {
+        return res.status(400).json({
+          success: false,
+          error: "Search query is required",
+        });
+      }
+
+      const products = await prisma.product.findMany({
+        where: {
+          OR: [
+            { name: { contains: q, mode: "insensitive" } },
+            { description: { contains: q, mode: "insensitive" } },
+          ],
+          stock: { gt: 0 },
+        },
+        include: {
+          images: true,
+          category: true,
+        },
+        skip,
+        take: limit,
+        orderBy: { name: "asc" },
+      });
+
+      const total = await prisma.product.count({
+        where: {
+          OR: [
+            { name: { contains: q, mode: "insensitive" } },
+            { description: { contains: q, mode: "insensitive" } },
+          ],
+          stock: { gt: 0 },
+        },
+      });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          products,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Search products error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to search products",
+      });
+    }
+  }
+
+  static async createProduct(req: AuthRequest, res: Response) {
+    try {
+      const { name, description, price, stock, categoryId, images } = req.body;
+
+      // Validation
+      if (!name || !description || !price || !categoryId) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "Missing required fields: name, description, price, categoryId",
+        });
+      }
+
+      if (price <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: "Price must be greater than 0",
+        });
+      }
+
+      const category = await prisma.category.findUnique({
+        where: { id: categoryId },
+      });
+
+      if (!category) {
+        return res.status(404).json({
+          success: false,
+          error: "Category not found",
+        });
+      }
+
+      const product = await prisma.product.create({
+        data: {
+          name,
+          description,
+          price,
+          stock: stock || 0,
+          categoryId,
+          images:
+            images && images.length > 0
+              ? {
+                  create: images.map((img: any) => ({
+                    url: img.url,
+                    altText: img.altText,
+                  })),
+                }
+              : undefined,
+        },
+        include: {
+          images: true,
+          category: true,
+        },
+      });
+
+      res.status(201).json({
+        success: true,
+        data: product,
+        message: "Product created successfully",
+      });
+    } catch (error) {
+      console.error("Create product error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to create product",
+      });
+    }
+  }
+
+  static async updateProduct(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const { name, description, price, stock, categoryId } = req.body;
+
+      const existingProduct = await prisma.product.findUnique({
+        where: { id },
+      });
+
+      if (!existingProduct) {
+        return res.status(404).json({
+          success: false,
+          error: "Product not found",
+        });
+      }
+
+      if (categoryId) {
+        const category = await prisma.category.findUnique({
+          where: { id: categoryId },
+        });
+        if (!category) {
+          return res.status(404).json({
+            success: false,
+            error: "Category not found",
+          });
+        }
+      }
+
+      if (price !== undefined && price <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: "Price must be greater than 0",
+        });
+      }
+
+      const product = await prisma.product.update({
+        where: { id },
+        data: {
+          name: name || undefined,
+          description: description || undefined,
+          price: price !== undefined ? price : undefined,
+          stock: stock !== undefined ? stock : undefined,
+          categoryId: categoryId || undefined,
+        },
+        include: {
+          images: true,
+          category: true,
+        },
+      });
+
+      res.status(200).json({
+        success: true,
+        data: product,
+        message: "Product updated successfully",
+      });
+    } catch (error) {
+      console.error("Update product error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to update product",
+      });
+    }
+  }
+
+  static async deleteProduct(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+
+      const product = await prisma.product.findUnique({
+        where: { id },
+        include: {
+          orderItems: {
+            take: 1,
+          },
+        },
+      });
+
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          error: "Product not found",
+        });
+      }
+
+      if (product.orderItems.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: "Cannot delete product with existing orders",
+        });
+      }
+
+      // Delete associated images first
+      await prisma.productImage.deleteMany({
+        where: { productId: id },
+      });
+
+      await prisma.product.delete({
+        where: { id },
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Product deleted successfully",
+      });
+    } catch (error) {
+      console.error("Delete product error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to delete product",
+      });
+    }
+  }
+
+  static async updateStock(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const { stock, operation } = req.body;
+
+      const product = await prisma.product.findUnique({
+        where: { id },
+      });
+
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          error: "Product not found",
+        });
+      }
+
+      let newStock = stock;
+      if (operation === "increment") {
+        newStock = product.stock + (stock || 0);
+      } else if (operation === "decrement") {
+        newStock = product.stock - (stock || 0);
+        if (newStock < 0) {
+          return res.status(400).json({
+            success: false,
+            error: "Insufficient stock",
+          });
+        }
+      }
+
+      const updatedProduct = await prisma.product.update({
+        where: { id },
+        data: { stock: newStock },
+      });
+
+      res.status(200).json({
+        success: true,
+        data: updatedProduct,
+        message: "Stock updated successfully",
+      });
+    } catch (error) {
+      console.error("Update stock error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to update stock",
+      });
+    }
+  }
+
+  static async getLowStockProducts(req: AuthRequest, res: Response) {
+    try {
+      const threshold = parseInt(req.query.threshold as string) || 10;
+
+      const products = await prisma.product.findMany({
+        where: {
+          stock: {
+            lte: threshold,
+          },
+        },
+        include: {
+          category: true,
+          images: true,
+        },
+        orderBy: {
+          stock: "asc",
+        },
+      });
+
+      res.status(200).json({
+        success: true,
+        data: products,
+      });
+    } catch (error) {
+      console.error("Get low stock products error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch low stock products",
+      });
+    }
+  }
+}
