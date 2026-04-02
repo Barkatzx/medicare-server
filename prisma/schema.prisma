@@ -46,21 +46,13 @@ model User {
   role             Role      @default(customer)
   password         String
   isApproved       Boolean   @default(false)
-
-  // FIX: store the default address ID as a plain nullable field.
-  // Do NOT declare a Prisma relation here — Address already has a
-  // relation back to User via userId. A second relation on the same
-  // FK causes an ambiguous-relation error in Prisma.
   defaultAddressId String?   @unique
-
   cart          Cart?
   orders        Order[]
   addresses     Address[]
   notifications Notification[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   @@index([role])
   @@index([isApproved])
 }
@@ -69,24 +61,15 @@ model Address {
   id         String  @id @default(uuid())
   userId     String
   user       User    @relation(fields: [userId], references: [id])
-
   street     String
   city       String
   state      String?
   postalCode String?
   country    String
   isDefault  Boolean @default(false)
-
   orders Order[]
-
-  // FIX: removed the broken "defaultForUser" relation — it tried to
-  // reuse userId as a FK to User.id for a *second* relation on User,
-  // conflicting with the primary user relation above. Default-address
-  // logic is managed in application code via User.defaultAddressId.
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   @@index([userId])
   @@index([isDefault])
 }
@@ -96,7 +79,6 @@ model Category {
   name        String    @unique
   description String?
   products    Product[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -107,17 +89,13 @@ model Product {
   description String
   price       Decimal @db.Decimal(10, 2)
   stock       Int     @default(0)
-
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
-
   images     ProductImage[]
   cartItems  CartItem[]
   orderItems OrderItem[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   @@index([categoryId])
   @@index([name])
   @@index([price])
@@ -130,9 +108,7 @@ model ProductImage {
   altText   String?
   productId String
   product   Product @relation(fields: [productId], references: [id])
-
   createdAt DateTime @default(now())
-
   @@index([productId])
 }
 
@@ -140,9 +116,7 @@ model Cart {
   id     String @id @default(uuid())
   userId String @unique
   user   User   @relation(fields: [userId], references: [id])
-
   items CartItem[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -154,10 +128,8 @@ model CartItem {
   productId String
   product   Product @relation(fields: [productId], references: [id])
   quantity  Int
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   @@unique([cartId, productId])
   @@index([cartId])
 }
@@ -170,13 +142,10 @@ model Order {
   shippingAddress   Address     @relation(fields: [shippingAddressId], references: [id])
   totalAmount       Decimal     @db.Decimal(10, 2)
   status            OrderStatus @default(pending)
-
   payment Payment?
   items   OrderItem[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   @@index([userId])
   @@index([status])
   @@index([createdAt])
@@ -191,9 +160,7 @@ model OrderItem {
   product   Product @relation(fields: [productId], references: [id])
   quantity  Int
   price     Decimal @db.Decimal(10, 2)
-
   createdAt DateTime @default(now())
-
   @@index([orderId])
   @@index([productId])
 }
@@ -205,7 +172,6 @@ model Payment {
   method  PaymentMethod @default(cod)
   status  PaymentStatus @default(pending)
   paidAt  DateTime?
-
   createdAt DateTime @default(now())
 }
 
@@ -217,9 +183,7 @@ model Notification {
   message String
   type    NotificationType
   isRead  Boolean          @default(false)
-
   createdAt DateTime @default(now())
-
   @@index([userId])
   @@index([isRead])
   @@index([createdAt])

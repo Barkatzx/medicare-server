@@ -1,9 +1,177 @@
 // src/controllers/product.controller.ts
 import { Request, Response } from "express";
 import { prisma } from "../config/supabase";
+import { ImageService } from "../services/image.service";
 import { AuthRequest } from "../types";
 
 export class ProductController {
+  static async createProductWithImages(req: AuthRequest, res: Response) {
+    try {
+      console.log("Request body:", req.body);
+      console.log("Request files:", req.files);
+
+      const { name, description, price, stock, categoryId } = req.body;
+
+      const files = req.files as Express.Multer.File[];
+
+      // Validation
+      if (!name || !description || !price || !categoryId) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "Missing required fields: name, description, price, categoryId",
+        });
+      }
+
+      if (parseFloat(price) <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: "Price must be greater than 0",
+        });
+      }
+
+      const category = await prisma.category.findUnique({
+        where: { id: categoryId },
+      });
+
+      if (!category) {
+        return res.status(404).json({
+          success: false,
+          error: "Category not found",
+        });
+      }
+
+      // Upload images if provided
+      let imageUrls: string[] = [];
+      if (files && files.length > 0) {
+        console.log(`Uploading ${files.length} images...`);
+        imageUrls = await ImageService.uploadMultipleImages(files, "products");
+        console.log("Uploaded image URLs:", imageUrls);
+      } else {
+        console.log("No files to upload");
+      }
+
+      const product = await prisma.product.create({
+        data: {
+          name,
+          description,
+          price: parseFloat(price),
+          stock: stock ? parseInt(stock) : 0,
+          categoryId,
+          images:
+            imageUrls.length > 0
+              ? {
+                  create: imageUrls.map((url, index) => ({
+                    url,
+                    altText: `${name} image ${index + 1}`,
+                  })),
+                }
+              : undefined,
+        },
+        include: {
+          images: true,
+          category: true,
+        },
+      });
+
+      res.status(201).json({
+        success: true,
+        data: product,
+        message: "Product created successfully",
+      });
+    } catch (error) {
+      console.error("Create product error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to create product",
+      });
+    }
+  }
+
+  static async addProductImages(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const files = req.files as Express.Multer.File[];
+
+      const product = await prisma.product.findUnique({
+        where: { id },
+      });
+
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          error: "Product not found",
+        });
+      }
+
+      // Upload new images
+      const imageUrls = await ImageService.uploadMultipleImages(
+        files,
+        "products",
+      );
+
+      // Add images to product
+      const images = await prisma.productImage.createMany({
+        data: imageUrls.map((url, index) => ({
+          url,
+          altText: `${product.name} image`,
+          productId: id,
+        })),
+      });
+
+      res.status(200).json({
+        success: true,
+        data: { added: imageUrls.length },
+        message: "Images added successfully",
+      });
+    } catch (error) {
+      console.error("Add product images error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to add images",
+      });
+    }
+  }
+
+  static async deleteProductImage(req: AuthRequest, res: Response) {
+    try {
+      const { productId, imageId } = req.params;
+
+      const image = await prisma.productImage.findFirst({
+        where: {
+          id: imageId,
+          productId: productId,
+        },
+      });
+
+      if (!image) {
+        return res.status(404).json({
+          success: false,
+          error: "Image not found",
+        });
+      }
+
+      // Delete from storage
+      await ImageService.deleteImage(image.url);
+
+      // Delete from database
+      await prisma.productImage.delete({
+        where: { id: imageId },
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Image deleted successfully",
+      });
+    } catch (error) {
+      console.error("Delete product image error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to delete image",
+      });
+    }
+  }
+
   static async getAllProducts(req: Request, res: Response) {
     try {
       const page = parseInt(req.query.page as string) || 1;

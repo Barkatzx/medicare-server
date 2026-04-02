@@ -4,8 +4,8 @@ import { ProductController } from "../controllers/product.controller";
 import {
   authenticateToken,
   authorizeAdmin,
-  authorizeApproved,
 } from "../middleware/auth.middleware";
+import { uploadMultiple } from "../middleware/upload.middleware";
 
 const router = Router();
 
@@ -27,8 +27,25 @@ router.post(
   "/",
   authenticateToken,
   authorizeAdmin,
-  ProductController.createProduct,
+  uploadMultiple,
+  ProductController.createProductWithImages,
 );
+
+router.post(
+  "/:id/images",
+  authenticateToken,
+  authorizeAdmin,
+  uploadMultiple,
+  ProductController.addProductImages,
+);
+
+router.delete(
+  "/:productId/images/:imageId",
+  authenticateToken,
+  authorizeAdmin,
+  ProductController.deleteProductImage,
+);
+
 router.put(
   "/:id",
   authenticateToken,
