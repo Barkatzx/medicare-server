@@ -1,16 +1,203 @@
 // src/controllers/product.controller.ts
 import { Request, Response } from "express";
 import { prisma } from "../config/supabase";
+import { DiscountService } from "../services/discount.service";
 import { ImageService } from "../services/image.service";
 import { AuthRequest } from "../types";
 
 export class ProductController {
+  // Get all products with discount calculation
+  static async getAllProducts(req: Request, res: Response) {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const skip = (page - 1) * limit;
+      const categoryId = req.query.categoryId as string;
+      const minPrice = parseFloat(req.query.minPrice as string);
+      const maxPrice = parseFloat(req.query.maxPrice as string);
+      const sortBy = (req.query.sortBy as string) || "createdAt";
+      const sortOrder = (req.query.sortOrder as string) || "desc";
+      const onSale = req.query.onSale === "true"; // Filter for discounted products
+
+      const where: any = {
+        stock: { gt: 0 },
+      };
+
+      if (categoryId) {
+        where.categoryId = categoryId;
+      }
+
+      // Price filtering considering discounts
+      if (minPrice || maxPrice) {
+        where.OR = [{ price: {} }, { discountedPrice: {} }];
+
+        if (minPrice) {
+          where.OR[0].price.gte = minPrice;
+          where.OR[1].discountedPrice.gte = minPrice;
+        }
+        if (maxPrice) {
+          where.OR[0].price.lte = maxPrice;
+          where.OR[1].discountedPrice.lte = maxPrice;
+        }
+      }
+
+      // Filter for products on sale
+      if (onSale) {
+        where.OR = [
+          { discountedPrice: { not: null } },
+          { discountPercent: { gt: 0 } },
+        ];
+      }
+
+      const orderBy: any = {};
+      orderBy[sortBy] = sortOrder;
+
+      const products = await prisma.product.findMany({
+        where,
+        include: {
+          images: true,
+          category: true,
+        },
+        skip,
+        take: limit,
+        orderBy,
+      });
+
+      // Calculate final price for each product
+      const productsWithDiscount = products.map((product) => {
+        const finalPrice = DiscountService.calculateFinalPrice(
+          Number(product.price),
+          product.discountedPrice ? Number(product.discountedPrice) : null,
+          product.discountPercent,
+        );
+        const savings = DiscountService.calculateSavings(
+          Number(product.price),
+          finalPrice,
+        );
+
+        return {
+          ...product,
+          price: Number(product.price),
+          discountedPrice: product.discountedPrice
+            ? Number(product.discountedPrice)
+            : null,
+          finalPrice,
+          savings,
+          discountBadge: DiscountService.getDiscountBadge(
+            Number(product.price),
+            finalPrice,
+          ),
+          discountPercent:
+            product.discountPercent ||
+            (savings > 0
+              ? DiscountService.calculateDiscountPercent(
+                  Number(product.price),
+                  finalPrice,
+                )
+              : 0),
+        };
+      });
+
+      const total = await prisma.product.count({ where });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          products: productsWithDiscount,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Get products error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch products",
+      });
+    }
+  }
+
+  // Get single product with discount calculation
+  static async getProductById(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+
+      const product = await prisma.product.findUnique({
+        where: { id },
+        include: {
+          images: true,
+          category: true,
+        },
+      });
+
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          error: "Product not found",
+        });
+      }
+
+      const finalPrice = DiscountService.calculateFinalPrice(
+        Number(product.price),
+        product.discountedPrice ? Number(product.discountedPrice) : null,
+        product.discountPercent,
+      );
+      const savings = DiscountService.calculateSavings(
+        Number(product.price),
+        finalPrice,
+      );
+
+      const productWithDiscount = {
+        ...product,
+        price: Number(product.price),
+        discountedPrice: product.discountedPrice
+          ? Number(product.discountedPrice)
+          : null,
+        finalPrice,
+        savings,
+        discountBadge: DiscountService.getDiscountBadge(
+          Number(product.price),
+          finalPrice,
+        ),
+        discountPercent:
+          product.discountPercent ||
+          (savings > 0
+            ? DiscountService.calculateDiscountPercent(
+                Number(product.price),
+                finalPrice,
+              )
+            : 0),
+      };
+
+      res.status(200).json({
+        success: true,
+        data: productWithDiscount,
+      });
+    } catch (error) {
+      console.error("Get product error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch product",
+      });
+    }
+  }
+
+  // Create product with discount support
   static async createProductWithImages(req: AuthRequest, res: Response) {
     try {
-      console.log("Request body:", req.body);
-      console.log("Request files:", req.files);
-
-      const { name, description, price, stock, categoryId } = req.body;
+      const {
+        name,
+        description,
+        price,
+        discountedPrice,
+        discountPercent,
+        stock,
+        categoryId,
+      } = req.body;
 
       const files = req.files as Express.Multer.File[];
 
@@ -23,10 +210,32 @@ export class ProductController {
         });
       }
 
-      if (parseFloat(price) <= 0) {
+      const parsedPrice = parseFloat(price);
+      if (parsedPrice <= 0) {
         return res.status(400).json({
           success: false,
           error: "Price must be greater than 0",
+        });
+      }
+
+      // Validate discount
+      const parsedDiscountedPrice = discountedPrice
+        ? parseFloat(discountedPrice)
+        : undefined;
+      const parsedDiscountPercent = discountPercent
+        ? parseInt(discountPercent)
+        : undefined;
+
+      const discountValidation = DiscountService.validateDiscount(
+        parsedPrice,
+        parsedDiscountedPrice,
+        parsedDiscountPercent,
+      );
+
+      if (!discountValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          error: discountValidation.error,
         });
       }
 
@@ -44,18 +253,16 @@ export class ProductController {
       // Upload images if provided
       let imageUrls: string[] = [];
       if (files && files.length > 0) {
-        console.log(`Uploading ${files.length} images...`);
         imageUrls = await ImageService.uploadMultipleImages(files, "products");
-        console.log("Uploaded image URLs:", imageUrls);
-      } else {
-        console.log("No files to upload");
       }
 
       const product = await prisma.product.create({
         data: {
           name,
           description,
-          price: parseFloat(price),
+          price: parsedPrice,
+          discountedPrice: parsedDiscountedPrice,
+          discountPercent: parsedDiscountPercent,
           stock: stock ? parseInt(stock) : 0,
           categoryId,
           images:
@@ -74,9 +281,26 @@ export class ProductController {
         },
       });
 
+      const finalPrice = DiscountService.calculateFinalPrice(
+        Number(product.price),
+        product.discountedPrice ? Number(product.discountedPrice) : null,
+        product.discountPercent,
+      );
+
       res.status(201).json({
         success: true,
-        data: product,
+        data: {
+          ...product,
+          price: Number(product.price),
+          discountedPrice: product.discountedPrice
+            ? Number(product.discountedPrice)
+            : null,
+          finalPrice,
+          savings: DiscountService.calculateSavings(
+            Number(product.price),
+            finalPrice,
+          ),
+        },
         message: "Product created successfully",
       });
     } catch (error) {
@@ -84,6 +308,202 @@ export class ProductController {
       res.status(500).json({
         success: false,
         error: "Failed to create product",
+      });
+    }
+  }
+
+  // Update product with discount support
+  static async updateProduct(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const {
+        name,
+        description,
+        price,
+        discountedPrice,
+        discountPercent,
+        stock,
+        categoryId,
+      } = req.body;
+
+      const existingProduct = await prisma.product.findUnique({
+        where: { id },
+      });
+
+      if (!existingProduct) {
+        return res.status(404).json({
+          success: false,
+          error: "Product not found",
+        });
+      }
+
+      if (categoryId) {
+        const category = await prisma.category.findUnique({
+          where: { id: categoryId },
+        });
+        if (!category) {
+          return res.status(404).json({
+            success: false,
+            error: "Category not found",
+          });
+        }
+      }
+
+      const parsedPrice = price ? parseFloat(price) : undefined;
+      const parsedDiscountedPrice = discountedPrice
+        ? parseFloat(discountedPrice)
+        : undefined;
+      const parsedDiscountPercent = discountPercent
+        ? parseInt(discountPercent)
+        : undefined;
+
+      // Validate discount if price or discount is being updated
+      if (
+        parsedPrice ||
+        parsedDiscountedPrice !== undefined ||
+        parsedDiscountPercent !== undefined
+      ) {
+        const currentPrice = parsedPrice || Number(existingProduct.price);
+        const discountValidation = DiscountService.validateDiscount(
+          currentPrice,
+          parsedDiscountedPrice,
+          parsedDiscountPercent,
+        );
+
+        if (!discountValidation.valid) {
+          return res.status(400).json({
+            success: false,
+            error: discountValidation.error,
+          });
+        }
+      }
+
+      const product = await prisma.product.update({
+        where: { id },
+        data: {
+          name: name || undefined,
+          description: description || undefined,
+          price: parsedPrice,
+          discountedPrice: parsedDiscountedPrice,
+          discountPercent: parsedDiscountPercent,
+          stock: stock !== undefined ? parseInt(stock) : undefined,
+          categoryId: categoryId || undefined,
+        },
+        include: {
+          images: true,
+          category: true,
+        },
+      });
+
+      const finalPrice = DiscountService.calculateFinalPrice(
+        Number(product.price),
+        product.discountedPrice ? Number(product.discountedPrice) : null,
+        product.discountPercent,
+      );
+
+      res.status(200).json({
+        success: true,
+        data: {
+          ...product,
+          price: Number(product.price),
+          discountedPrice: product.discountedPrice
+            ? Number(product.discountedPrice)
+            : null,
+          finalPrice,
+          savings: DiscountService.calculateSavings(
+            Number(product.price),
+            finalPrice,
+          ),
+        },
+        message: "Product updated successfully",
+      });
+    } catch (error) {
+      console.error("Update product error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to update product",
+      });
+    }
+  }
+
+  // Get products on sale
+  static async getProductsOnSale(req: Request, res: Response) {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const skip = (page - 1) * limit;
+
+      const products = await prisma.product.findMany({
+        where: {
+          OR: [
+            { discountedPrice: { not: null } },
+            { discountPercent: { gt: 0 } },
+          ],
+          stock: { gt: 0 },
+        },
+        include: {
+          images: true,
+          category: true,
+        },
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+      });
+
+      const productsWithDiscount = products.map((product) => {
+        const finalPrice = DiscountService.calculateFinalPrice(
+          Number(product.price),
+          product.discountedPrice ? Number(product.discountedPrice) : null,
+          product.discountPercent,
+        );
+
+        return {
+          ...product,
+          price: Number(product.price),
+          discountedPrice: product.discountedPrice
+            ? Number(product.discountedPrice)
+            : null,
+          finalPrice,
+          savings: DiscountService.calculateSavings(
+            Number(product.price),
+            finalPrice,
+          ),
+          discountPercent:
+            product.discountPercent ||
+            DiscountService.calculateDiscountPercent(
+              Number(product.price),
+              finalPrice,
+            ),
+        };
+      });
+
+      const total = await prisma.product.count({
+        where: {
+          OR: [
+            { discountedPrice: { not: null } },
+            { discountPercent: { gt: 0 } },
+          ],
+          stock: { gt: 0 },
+        },
+      });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          products: productsWithDiscount,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Get sale products error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch sale products",
       });
     }
   }
@@ -168,100 +588,6 @@ export class ProductController {
       res.status(500).json({
         success: false,
         error: "Failed to delete image",
-      });
-    }
-  }
-
-  static async getAllProducts(req: Request, res: Response) {
-    try {
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 20;
-      const skip = (page - 1) * limit;
-      const categoryId = req.query.categoryId as string;
-      const minPrice = parseFloat(req.query.minPrice as string);
-      const maxPrice = parseFloat(req.query.maxPrice as string);
-      const sortBy = (req.query.sortBy as string) || "createdAt";
-      const sortOrder = (req.query.sortOrder as string) || "desc";
-
-      const where: any = {
-        stock: { gt: 0 },
-      };
-
-      if (categoryId) {
-        where.categoryId = categoryId;
-      }
-
-      if (minPrice || maxPrice) {
-        where.price = {};
-        if (minPrice) where.price.gte = minPrice;
-        if (maxPrice) where.price.lte = maxPrice;
-      }
-
-      const orderBy: any = {};
-      orderBy[sortBy] = sortOrder;
-
-      const products = await prisma.product.findMany({
-        where,
-        include: {
-          images: true,
-          category: true,
-        },
-        skip,
-        take: limit,
-        orderBy,
-      });
-
-      const total = await prisma.product.count({ where });
-
-      res.status(200).json({
-        success: true,
-        data: {
-          products,
-          pagination: {
-            page,
-            limit,
-            total,
-            totalPages: Math.ceil(total / limit),
-          },
-        },
-      });
-    } catch (error) {
-      console.error("Get products error:", error);
-      res.status(500).json({
-        success: false,
-        error: "Failed to fetch products",
-      });
-    }
-  }
-
-  static async getProductById(req: Request, res: Response) {
-    try {
-      const { id } = req.params;
-
-      const product = await prisma.product.findUnique({
-        where: { id },
-        include: {
-          images: true,
-          category: true,
-        },
-      });
-
-      if (!product) {
-        return res.status(404).json({
-          success: false,
-          error: "Product not found",
-        });
-      }
-
-      res.status(200).json({
-        success: true,
-        data: product,
-      });
-    } catch (error) {
-      console.error("Get product error:", error);
-      res.status(500).json({
-        success: false,
-        error: "Failed to fetch product",
       });
     }
   }
@@ -392,70 +718,6 @@ export class ProductController {
       res.status(500).json({
         success: false,
         error: "Failed to create product",
-      });
-    }
-  }
-
-  static async updateProduct(req: AuthRequest, res: Response) {
-    try {
-      const { id } = req.params;
-      const { name, description, price, stock, categoryId } = req.body;
-
-      const existingProduct = await prisma.product.findUnique({
-        where: { id },
-      });
-
-      if (!existingProduct) {
-        return res.status(404).json({
-          success: false,
-          error: "Product not found",
-        });
-      }
-
-      if (categoryId) {
-        const category = await prisma.category.findUnique({
-          where: { id: categoryId },
-        });
-        if (!category) {
-          return res.status(404).json({
-            success: false,
-            error: "Category not found",
-          });
-        }
-      }
-
-      if (price !== undefined && price <= 0) {
-        return res.status(400).json({
-          success: false,
-          error: "Price must be greater than 0",
-        });
-      }
-
-      const product = await prisma.product.update({
-        where: { id },
-        data: {
-          name: name || undefined,
-          description: description || undefined,
-          price: price !== undefined ? price : undefined,
-          stock: stock !== undefined ? stock : undefined,
-          categoryId: categoryId || undefined,
-        },
-        include: {
-          images: true,
-          category: true,
-        },
-      });
-
-      res.status(200).json({
-        success: true,
-        data: product,
-        message: "Product updated successfully",
-      });
-    } catch (error) {
-      console.error("Update product error:", error);
-      res.status(500).json({
-        success: false,
-        error: "Failed to update product",
       });
     }
   }

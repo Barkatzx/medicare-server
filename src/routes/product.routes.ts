@@ -11,6 +11,7 @@ const router = Router();
 
 // ==================== PUBLIC ROUTES ====================
 router.get("/", ProductController.getAllProducts);
+router.get("/on-sale", ProductController.getProductsOnSale);
 router.get("/search", ProductController.searchProducts);
 router.get("/:id", ProductController.getProductById);
 

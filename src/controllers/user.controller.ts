@@ -58,7 +58,7 @@ export class UserController {
   // Login user
   static async login(req: Request, res: Response) {
     try {
-      const { email, password } = req.body;
+      const { email, phone_number, password } = req.body;
 
       if (!email || !password) {
         return res
@@ -66,7 +66,7 @@ export class UserController {
           .json({ error: "Email and password are required" });
       }
 
-      const result = await AuthService.login({ email, password });
+      const result = await AuthService.login({ email, phone_number, password });
       res.status(200).json({ message: "Login successful", data: result });
     } catch (error: any) {
       console.error("Login error:", error);

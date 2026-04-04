@@ -18,9 +18,52 @@ export interface RegisterInput {
 
 export interface LoginInput {
   email: string;
+  phone_number: string;
   password: string;
 }
 
 export interface AuthRequest extends Request {
   user?: UserPayload;
+}
+
+// src/types/index.ts
+export interface ProductImageInput {
+  url: string;
+  altText?: string;
+}
+
+export interface CreateProductBody {
+  name: string;
+  description: string;
+  price: number;
+  discountedPrice?: number;
+  discountPercent?: number;
+  stock?: number;
+  categoryId: string;
+  images?: ProductImageInput[];
+}
+
+export interface UpdateProductBody {
+  name?: string;
+  description?: string;
+  price?: number;
+  discountedPrice?: number;
+  discountPercent?: number;
+  stock?: number;
+  categoryId?: string;
+}
+
+export interface ProductResponse {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  discountedPrice: number | null;
+  discountPercent: number | null;
+  finalPrice: number; // Calculated field
+  savings: number; // Calculated field
+  stock: number;
+  categoryId: string;
+  images: any[];
+  category: any;
 }

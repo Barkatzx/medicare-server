@@ -1,6 +1,7 @@
 // src/controllers/order.controller.ts
 import { Response } from "express";
 import { prisma } from "../config/supabase";
+import { DiscountService } from "../services/discount.service";
 import { AuthRequest } from "../types";
 
 interface CreateOrderBody {
@@ -59,8 +60,10 @@ export class OrderController {
           error: "Cart is empty",
         });
       }
+      // Check stock availability and calculate totals with discounts
+      let totalAmount = 0;
+      let totalOriginalAmount = 0;
 
-      // Check stock availability
       for (const item of cart.items) {
         if (item.quantity > item.product.stock) {
           return res.status(400).json({
@@ -68,14 +71,19 @@ export class OrderController {
             error: `Insufficient stock for product: ${item.product.name}. Available: ${item.product.stock}`,
           });
         }
+
+        const originalPrice = Number(item.product.price);
+        const finalPrice = DiscountService.calculateFinalPrice(
+          originalPrice,
+          item.product.discountedPrice
+            ? Number(item.product.discountedPrice)
+            : null,
+          item.product.discountPercent,
+        );
+
+        totalOriginalAmount += originalPrice * item.quantity;
+        totalAmount += finalPrice * item.quantity;
       }
-
-      // Calculate total amount
-      const totalAmount = cart.items.reduce(
-        (sum, item) => sum + Number(item.product.price) * item.quantity,
-        0,
-      );
-
       // Create order with transaction
       const result = await prisma.$transaction(async (tx) => {
         // Create order
@@ -86,11 +94,22 @@ export class OrderController {
             totalAmount,
             status: "pending",
             items: {
-              create: cart.items.map((item) => ({
-                productId: item.productId,
-                quantity: item.quantity,
-                price: item.product.price,
-              })),
+              create: cart.items.map((item) => {
+                const originalPrice = Number(item.product.price);
+                const finalPrice = DiscountService.calculateFinalPrice(
+                  originalPrice,
+                  item.product.discountedPrice
+                    ? Number(item.product.discountedPrice)
+                    : null,
+                  item.product.discountPercent,
+                );
+
+                return {
+                  productId: item.productId,
+                  quantity: item.quantity,
+                  price: finalPrice, // Store the discounted price in order item
+                };
+              }),
             },
             payment: {
               create: {
@@ -127,12 +146,16 @@ export class OrderController {
           where: { cartId: cart.id },
         });
 
-        // Create notification for user
+        // Create notification with savings info
+        const totalSavings = totalOriginalAmount - totalAmount;
+        const savingsMessage =
+          totalSavings > 0 ? ` You saved $${totalSavings.toFixed(2)}!` : "";
+
         await tx.notification.create({
           data: {
             userId,
             title: "Order Placed Successfully",
-            message: `Your order #${order.id} has been placed successfully. Total amount: $${totalAmount}`,
+            message: `Your order #${order.id} has been placed successfully. Total amount: $${totalAmount}${savingsMessage}`,
             type: "order",
           },
         });
@@ -153,7 +176,6 @@ export class OrderController {
       });
     }
   }
-
   static async getMyOrders(req: AuthRequest, res: Response) {
     try {
       const userId = req.user!.id;

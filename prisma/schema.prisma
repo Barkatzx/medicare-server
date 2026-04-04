@@ -37,6 +37,11 @@ enum NotificationType {
   system
 }
 
+enum DiscountType {
+  percentage
+  fixed
+}
+
 model User {
   id               String    @id @default(uuid())
   email            String    @unique
@@ -88,6 +93,8 @@ model Product {
   name        String
   description String
   price       Decimal @db.Decimal(10, 2)
+  discountedPrice Decimal? @db.Decimal(10, 2)
+  discountPercent Int? @default(0)
   stock       Int     @default(0)
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
@@ -100,6 +107,7 @@ model Product {
   @@index([name])
   @@index([price])
   @@index([stock])
+  @@index([discountedPrice])
 }
 
 model ProductImage {
