@@ -55,25 +55,39 @@ export class AuthService {
     };
   }
 
+  // Login With Email or Phone Number
   static async login(input: LoginInput) {
-    const { email, password } = input;
+    const { email, phone_number, password } = input;
+
+    // Validate that at least one identifier is provided
+    if (!email && !phone_number) {
+      throw new Error("Email or phone number is required");
+    }
+
+    // Build the where condition dynamically
+    const whereCondition: any = {};
+    if (email) {
+      whereCondition.email = email;
+    } else if (phone_number) {
+      whereCondition.phone_number = phone_number;
+    }
 
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: whereCondition,
       select: {
         id: true,
         email: true,
+        phone_number: true,
         password: true,
         role: true,
         isApproved: true,
         name: true,
-        phone_number: true,
         pharmacy_name: true,
       },
     });
 
     if (!user) {
-      throw new Error("Invalid email or password");
+      throw new Error("Invalid email/phone number or password");
     }
 
     if (!user.isApproved) {
@@ -82,12 +96,11 @@ export class AuthService {
 
     const isPasswordValid = await compare(password, user.password);
     if (!isPasswordValid) {
-      throw new Error("Invalid email or password");
+      throw new Error("Invalid email/phone number or password");
     }
 
     const { password: _, ...userWithoutPassword } = user;
 
-    // FIX: actually sign and return a JWT token
     const payload: UserPayload = {
       id: user.id,
       email: user.email,
@@ -96,7 +109,7 @@ export class AuthService {
     };
 
     const token = jwt.sign(payload, process.env.JWT_SECRET!, {
-      expiresIn: "7d",
+      expiresIn: "30d",
     });
 
     return {

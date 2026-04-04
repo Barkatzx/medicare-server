@@ -60,10 +60,12 @@ export class UserController {
     try {
       const { email, phone_number, password } = req.body;
 
-      if (!email || !password) {
-        return res
-          .status(400)
-          .json({ error: "Email and password are required" });
+      // Validate that either email or phone_number is provided
+      if ((!email && !phone_number) || !password) {
+        return res.status(400).json({
+          error:
+            "Either email or phone number is required, along with password",
+        });
       }
 
       const result = await AuthService.login({ email, phone_number, password });

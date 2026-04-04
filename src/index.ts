@@ -6,6 +6,7 @@ import userRoutes from "./routes/user.routes";
 import categoryRoutes from "./routes/category.routes";
 import productRoutes from "./routes/product.routes";
 import orderRoutes from "./routes/order.routes";
+import salesRoutes from "./routes/sales.routes"; // Import sales routes
 
 dotenv.config();
 
@@ -22,6 +23,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/sales", salesRoutes);
 
 // Health check
 app.get("/", (req, res) => {
