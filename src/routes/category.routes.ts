@@ -6,31 +6,35 @@ import {
   authorizeAdmin,
   authorizeApproved,
 } from "../middleware/auth.middleware";
+import { cacheRoute, invalidateCache } from "../middleware/cache.middleware";
 
 const router = Router();
 
 // ==================== PUBLIC ROUTES ====================
-router.get("/", CategoryController.getAllCategories);
-router.get("/:id", CategoryController.getCategoryById);
-router.get("/:id/products", CategoryController.getCategoryProducts);
+router.get("/", cacheRoute(600), CategoryController.getAllCategories);
+router.get("/:id", cacheRoute(600), CategoryController.getCategoryById);
+router.get("/:id/products", cacheRoute(300), CategoryController.getCategoryProducts);
 
 // ==================== ADMIN ROUTES ====================
 router.post(
   "/",
   authenticateToken,
   authorizeAdmin,
+  invalidateCache("cache:*:*categories*"),
   CategoryController.createCategory,
 );
 router.put(
   "/:id",
   authenticateToken,
   authorizeAdmin,
+  invalidateCache("cache:*:*categories*"),
   CategoryController.updateCategory,
 );
 router.delete(
   "/:id",
   authenticateToken,
   authorizeAdmin,
+  invalidateCache("cache:*:*categories*"),
   CategoryController.deleteCategory,
 );
 

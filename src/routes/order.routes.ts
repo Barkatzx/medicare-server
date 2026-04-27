@@ -6,6 +6,7 @@ import {
   authorizeAdmin,
   authorizeApproved,
 } from "../middleware/auth.middleware";
+import { cacheRoute, invalidateCache } from "../middleware/cache.middleware";
 
 const router = Router();
 
@@ -14,12 +15,16 @@ router.post(
   "/",
   authenticateToken,
   authorizeApproved,
+  invalidateCache("cache:{userId}:/api/users/cart*"),
+  invalidateCache("cache:{userId}:/api/orders*"),
+  invalidateCache("cache:*:*sales*"),
   OrderController.createOrder,
 );
 router.get(
   "/my-orders",
   authenticateToken,
   authorizeApproved,
+  cacheRoute(300),
   OrderController.getMyOrders,
 );
 router.get(
@@ -32,6 +37,8 @@ router.put(
   "/:orderId/cancel",
   authenticateToken,
   authorizeApproved,
+  invalidateCache("cache:{userId}:/api/orders*"),
+  invalidateCache("cache:*:*sales*"),
   OrderController.cancelOrder,
 );
 
@@ -40,6 +47,7 @@ router.get(
   "/",
   authenticateToken,
   authorizeAdmin,
+  cacheRoute(300),
   OrderController.getAllOrders,
 );
 router.get(
@@ -52,6 +60,8 @@ router.put(
   "/:orderId/status",
   authenticateToken,
   authorizeAdmin,
+  invalidateCache("cache:*:*orders*"),
+  invalidateCache("cache:*:*sales*"),
   OrderController.updateOrderStatus,
 );
 router.put(

@@ -7,6 +7,9 @@ import categoryRoutes from "./routes/category.routes";
 import productRoutes from "./routes/product.routes";
 import orderRoutes from "./routes/order.routes";
 import salesRoutes from "./routes/sales.routes"; // Import sales routes
+import { connectRedis } from "./config/redis";
+import redisClient from "./config/redis";
+// import { cacheMiddleware } from "./middleware/cache.middleware"; // Removed global cache
 
 dotenv.config();
 
@@ -17,6 +20,12 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Connect to Redis
+connectRedis();
+
+// Global Cache Middleware - Removed for route-level control
+// app.use(cacheMiddleware);
 
 // Routes
 app.use("/api/users", userRoutes);
@@ -52,5 +61,10 @@ app.listen(PORT, () => {
 process.on("SIGINT", async () => {
   await prisma.$disconnect();
   console.log("Disconnected from database");
+  if (redisClient.isOpen) {
+    await redisClient.disconnect();
+    console.log("Disconnected from Redis");
+  }
+
   process.exit(0);
 });

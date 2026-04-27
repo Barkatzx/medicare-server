@@ -5,6 +5,7 @@ import {
   authenticateToken,
   authorizeAdmin,
 } from "../middleware/auth.middleware";
+import { cacheRoute, invalidateCache } from "../middleware/cache.middleware";
 
 const router = Router();
 
@@ -12,30 +13,30 @@ const router = Router();
 router.use(authenticateToken, authorizeAdmin);
 
 // Daily sales report
-router.get("/daily", SalesController.getDailySales);
+router.get("/daily", cacheRoute(3600), SalesController.getDailySales);
 
 // Weekly sales report
-router.get("/weekly", SalesController.getWeeklySales);
+router.get("/weekly", cacheRoute(3600), SalesController.getWeeklySales);
 
 // Monthly sales report
-router.get("/monthly", SalesController.getMonthlySales);
+router.get("/monthly", cacheRoute(3600), SalesController.getMonthlySales);
 
 // Yearly sales report
-router.get("/yearly", SalesController.getYearlySales);
+router.get("/yearly", cacheRoute(3600), SalesController.getYearlySales);
 
 // Sales summary (overall statistics)
-router.get("/summary", SalesController.getSalesSummary);
+router.get("/summary", cacheRoute(3600), SalesController.getSalesSummary);
 
 // Custom date range sales
-router.get("/custom-range", SalesController.getCustomRangeSales);
+router.get("/custom-range", cacheRoute(300), SalesController.getCustomRangeSales);
 
 // Top selling products
-router.get("/top-products", SalesController.getTopProducts);
+router.get("/top-products", cacheRoute(3600), SalesController.getTopProducts);
 
 // Export sales report
 router.get("/export", SalesController.exportSalesReport);
 
 // See Dashboard Statistics
-router.get("/dashboard", SalesController.getDashboardStats);
+router.get("/dashboard", cacheRoute(300), SalesController.getDashboardStats);
 
 export default router;
