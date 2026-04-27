@@ -2,6 +2,9 @@ import { Response, NextFunction } from "express";
 import redisClient from "../config/redis";
 import { AuthRequest } from "../types";
 
+// Map to track in-flight requests for cache stampede protection
+const inFlightRequests = new Map<string, Promise<any>>();
+
 /**
  * Middleware to cache route responses
  * @param ttlSeconds Time to live in seconds
@@ -17,23 +20,50 @@ export const cacheRoute = (ttlSeconds: number) => {
     const key = `cache:${userId}:${req.originalUrl}`;
 
     try {
+      // 1. Check Redis
       const cachedData = await redisClient.get(key);
 
       if (cachedData) {
+        console.log(`[Cache] HIT: ${key}`);
         return res.status(200).json(JSON.parse(cachedData));
       }
 
+      console.log(`[Cache] MISS: ${key}`);
+
+      // 2. Stampede Protection: Check if another request is already fetching this
+      if (inFlightRequests.has(key)) {
+        console.log(`[Cache] STAMPEDE PROTECTION: Waiting for in-flight request: ${key}`);
+        const data = await inFlightRequests.get(key);
+        return res.status(200).json(data);
+      }
+
+      // 3. Intercept res.json to cache the response
       const originalJson = res.json.bind(res);
+      
+      // We wrap the controller execution in a promise to track it
+      let resolveInFlight: (value: any) => void;
+      const inFlightPromise = new Promise((resolve) => {
+        resolveInFlight = resolve;
+      });
+      inFlightRequests.set(key, inFlightPromise);
+
       res.json = (body: any) => {
+        // Only cache successful responses
         if (res.statusCode >= 200 && res.statusCode < 300) {
           redisClient.setEx(key, ttlSeconds, JSON.stringify(body));
         }
+        
+        // Resolve the in-flight promise and cleanup
+        resolveInFlight(body);
+        inFlightRequests.delete(key);
+        
         return originalJson(body);
       };
 
       next();
     } catch (error) {
       console.error("Redis Cache Error:", error);
+      inFlightRequests.delete(key);
       next();
     }
   };
@@ -54,10 +84,12 @@ export const invalidateCache = (pattern: string) => {
           const userId = req.user?.id || "public";
           const finalPattern = pattern.replace("{userId}", userId);
           
-          // Use keys to find and delete. In a huge production DB, SCAN is better.
+          console.log(`[Cache] INVALIDATING: ${finalPattern}`);
+          
           const keys = await redisClient.keys(finalPattern);
           if (keys.length > 0) {
             await redisClient.del(keys);
+            console.log(`[Cache] DELETED ${keys.length} keys`);
           }
         } catch (error) {
           console.error("Redis Cache Invalidation Error:", error);
