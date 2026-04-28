@@ -132,7 +132,7 @@ router.put(
   UserController.markAllNotificationsRead,
 );
 router.put(
-  "/notifications/:notificationId/read",
+  "/notifications/:notificationId",
   authenticateToken,
   authorizeApproved,
   UserController.markNotificationRead,
