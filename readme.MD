@@ -1,67 +1,105 @@
-# 🛒 Node.js + TypeScript E-Commerce Backend (Prisma + Supabase + Redis)
+# 🛒 E-Commerce Backend API  
+### MediCarePLC - Node.js + TypeScript + Prisma + Supabase + Redis 
 
-A scalable and production-ready e-commerce backend built with **Node.js, Express, TypeScript**, integrated with **Prisma ORM**, **Supabase (PostgreSQL + Storage)**, and **Redis caching** for high-performance API responses.
+A **scalable, high-performance e-commerce backend** built with modern technologies. Designed for real-world production use with clean architecture, caching, and extensibility in mind.
 
-## 🚀 Features
+## 🚀 Overview
 
-### 🔐 Authentication & User Management
-- Secure signup/login system (JWT + Supabase Auth)
-- Role-based access control (Admin / User)
-- Protected routes using middleware
+This backend powers a complete e-commerce ecosystem including:
+
+- 🛍️ Product & inventory management  
+- 🛒 Cart & order processing  
+- 🔐 Authentication & authorization  
+- ⚡ Redis-powered performance optimization  
+
+It is designed to integrate seamlessly with:
+
+- 📱 Flutter mobile apps  
+- 🖥️ Next.js admin dashboards  
+- 🌐 Third-party services  
+
+
+## ✨ Key Features
+
+### 🔐 Authentication & Authorization
+- JWT-based secure authentication  
+- Supabase Auth integration  
+- Role-based access control (Admin / User)  
+- Middleware-protected routes  
+
 
 ### 🛍️ Product Management
-- Create, update, delete, and fetch products
-- Category-based product organization
-- Stock & inventory tracking
+- Full CRUD operations for products  
+- Category-based organization  
+- Inventory & stock tracking  
+- Optimized queries using Prisma  
 
-### 🛒 Cart & Orders System
-- Add/remove items from cart
-- Order creation & order history tracking
-- Real-time stock validation
 
-### 🖼️ Image & File Storage
-- Product image upload via Supabase Storage
-- Secure file handling with validation
+### 🛒 Cart & Order System
+- Add/remove items from cart  
+- Order placement & history tracking  
+- Real-time stock validation  
+- Transaction-safe operations  
 
-### ⚡ Redis Caching (Performance Layer)
-- In-memory caching for frequently accessed data
-- Cached endpoints:
-  - Product listings
-  - Product details
-  - Categories
-- Active cache invalidation on data changes (POST/PUT/DELETE)
-- Cache stampede protection for high traffic endpoints
-- TTL-based expiration for data freshness
 
-👉 Results:
-- Up to 90% reduction in database load
-- Sub-millisecond API responses for cached data
+### 🖼️ File & Image Handling
+- Product image upload via Supabase Storage  
+- Secure file validation  
+- Public/private asset handling  
 
-### 🧠 Database Layer (Prisma ORM)
-- Type-safe PostgreSQL queries
-- Automated migrations
-- Clean and scalable schema design
+### ⚡ Redis Caching Layer
 
-### 🌐 RESTful API
-- Clean and modular API architecture
-- Ready for:
-  - Flutter mobile app
-  - Next.js admin dashboard
-  - External integrations
+A powerful caching system designed for performance and scalability:
+
+- In-memory caching for high-frequency endpoints  
+- Cached resources:
+  - Product list  
+  - Product details  
+  - Categories  
+
+- Smart cache invalidation on:
+  - Create (POST)  
+  - Update (PUT/PATCH)  
+  - Delete (DELETE)  
+
+- Cache stampede protection  
+- TTL-based expiration  
+
+#### 📊 Performance Gains:
+- 🚀 Up to **90% reduced database load**  
+- ⚡ Sub-millisecond response times (cached endpoints)  
+
+### 🧠 Database & ORM
+
+- PostgreSQL via Supabase  
+- Prisma ORM (type-safe queries)  
+- Clean schema design  
+- Migration support  
+
+### 🌐 REST API Architecture
+
+- Modular and scalable structure  
+- Clean separation of concerns  
+- Easily extendable  
+- Production-ready routing system  
 
 ### 📈 Scalability & Performance
-- Redis caching layer for high-speed reads
-- Optimized Prisma queries
-- Middleware-based architecture for extensibility
-- Designed for horizontal scaling
+
+- Redis for ultra-fast reads  
+- Optimized database queries  
+- Middleware-driven architecture  
+- Built for horizontal scaling  
+
 
 ## 🧱 Tech Stack
 
-- **Backend:** Node.js, Express
-- **Language:** TypeScript
-- **Database:** PostgreSQL (Supabase)
-- **ORM:** Prisma
-- **Cache:** Redis
-- **Auth:** JWT + Supabase Auth
-- **Storage:** Supabase Storage
-- **Validation:** Express Validator
+| Layer        | Technology |
+|-------------|-----------|
+| Backend     | Node.js, Express |
+| Language    | TypeScript |
+| Database    | PostgreSQL (Supabase) |
+| ORM         | Prisma |
+| Cache       | Redis |
+| Auth        | JWT + Supabase Auth |
+| Storage     | Supabase Storage |
+| Validation  | Express Validator |
