@@ -18,9 +18,14 @@ export class ProductController {
       const sortBy = (req.query.sortBy as string) || "createdAt";
       const sortOrder = (req.query.sortOrder as string) || "desc";
       const onSale = req.query.onSale === "true";
+      const inStockOnly = req.query.inStock === "true";
 
-      // Build filters using AND to avoid overwriting OR conditions
-      const andFilters: any[] = [{ stock: { gt: 0 } }];
+      // Build filters
+      const andFilters: any[] = [];
+
+      if (inStockOnly) {
+        andFilters.push({ stock: { gt: 0 } });
+      }
 
       if (categoryId) {
         andFilters.push({ categoryId });
