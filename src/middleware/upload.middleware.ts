@@ -31,3 +31,29 @@ export const upload = multer({
 // For multiple images
 export const uploadMultiple = upload.array("images", 10); // Max 10 images
 export const uploadSingle = upload.single("image");
+
+// Wrapper to handle Multer errors
+export const handleMulterError = (middleware: any) => {
+  return (req: any, res: any, next: any) => {
+    middleware(req, res, (err: any) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_UNEXPECTED_FILE") {
+          return res.status(400).json({
+            success: false,
+            error: `Unexpected field: "${err.field}". Please use "images" as the field name for multiple uploads.`,
+          });
+        }
+        return res.status(400).json({
+          success: false,
+          error: `Upload error: ${err.message}`,
+        });
+      } else if (err) {
+        return res.status(400).json({
+          success: false,
+          error: err.message,
+        });
+      }
+      next();
+    });
+  };
+};

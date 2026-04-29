@@ -5,7 +5,7 @@ import {
   authenticateToken,
   authorizeAdmin,
 } from "../middleware/auth.middleware";
-import { uploadMultiple } from "../middleware/upload.middleware";
+import { uploadMultiple, handleMulterError } from "../middleware/upload.middleware";
 import { cacheRoute, invalidateCache } from "../middleware/cache.middleware";
 
 const router = Router();
@@ -30,7 +30,7 @@ router.post(
   authenticateToken,
   authorizeAdmin,
   invalidateCache("cache:*:*products*"),
-  uploadMultiple,
+  handleMulterError(uploadMultiple),
   ProductController.createProductWithImages,
 );
 
@@ -38,7 +38,7 @@ router.post(
   "/:id/images",
   authenticateToken,
   authorizeAdmin,
-  uploadMultiple,
+  handleMulterError(uploadMultiple),
   ProductController.addProductImages,
 );
 
@@ -63,6 +63,7 @@ router.put(
   authenticateToken,
   authorizeAdmin,
   invalidateCache("cache:*:*products*"),
+  handleMulterError(uploadMultiple),
   ProductController.updateProduct,
 );
 router.delete(

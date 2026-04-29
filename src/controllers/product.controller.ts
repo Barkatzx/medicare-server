@@ -305,11 +305,11 @@ export class ProductController {
         },
         message: "Product created successfully",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Create product error:", error);
       res.status(500).json({
         success: false,
-        error: "Failed to create product",
+        error: error.message || "Failed to create product",
       });
     }
   }
@@ -328,8 +328,11 @@ export class ProductController {
         categoryId,
       } = req.body;
 
+      const files = req.files as Express.Multer.File[];
+
       const existingProduct = await prisma.product.findUnique({
         where: { id },
+        include: { images: true },
       });
 
       if (!existingProduct) {
@@ -380,6 +383,24 @@ export class ProductController {
         }
       }
 
+      // Handle new image uploads if any
+      let newImagesData = undefined;
+      if (files && files.length > 0) {
+        const imageUrls = await ImageService.uploadMultipleImages(
+          files,
+          "products",
+        );
+        const hasDefault = existingProduct.images.some((img) => img.isDefault);
+
+        newImagesData = {
+          create: imageUrls.map((url, index) => ({
+            url,
+            altText: `${name || existingProduct.name} image`,
+            isDefault: !hasDefault && index === 0,
+          })),
+        };
+      }
+
       const product = await prisma.product.update({
         where: { id },
         data: {
@@ -390,6 +411,7 @@ export class ProductController {
           discountPercent: parsedDiscountPercent,
           stock: stock !== undefined ? parseInt(stock) : undefined,
           categoryId: categoryId || undefined,
+          images: newImagesData,
         },
         include: {
           images: true,
@@ -419,11 +441,11 @@ export class ProductController {
         },
         message: "Product updated successfully",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Update product error:", error);
       res.status(500).json({
         success: false,
-        error: "Failed to update product",
+        error: error.message || "Failed to update product",
       });
     }
   }
@@ -550,11 +572,11 @@ export class ProductController {
         data: { added: imageUrls.length },
         message: "Images added successfully",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Add product images error:", error);
       res.status(500).json({
         success: false,
-        error: "Failed to add images",
+        error: error.message || "Failed to add images",
       });
     }
   }
@@ -606,11 +628,11 @@ export class ProductController {
         success: true,
         message: "Image deleted successfully",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Delete product image error:", error);
       res.status(500).json({
         success: false,
-        error: "Failed to delete image",
+        error: error.message || "Failed to delete image",
       });
     }
   }
@@ -652,11 +674,11 @@ export class ProductController {
         success: true,
         message: "Default image set successfully",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Set default image error:", error);
       res.status(500).json({
         success: false,
-        error: "Failed to set default image",
+        error: error.message || "Failed to set default image",
       });
     }
   }
@@ -783,11 +805,11 @@ export class ProductController {
         data: product,
         message: "Product created successfully",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Create product error:", error);
       res.status(500).json({
         success: false,
-        error: "Failed to create product",
+        error: error.message || "Failed to create product",
       });
     }
   }
@@ -832,11 +854,11 @@ export class ProductController {
         success: true,
         message: "Product deleted successfully",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Delete product error:", error);
       res.status(500).json({
         success: false,
-        error: "Failed to delete product",
+        error: error.message || "Failed to delete product",
       });
     }
   }
