@@ -17,51 +17,58 @@ export class ProductController {
       const maxPrice = parseFloat(req.query.maxPrice as string);
       const sortBy = (req.query.sortBy as string) || "createdAt";
       const sortOrder = (req.query.sortOrder as string) || "desc";
-      const onSale = req.query.onSale === "true"; // Filter for discounted products
+      const onSale = req.query.onSale === "true";
 
-      const where: any = {
-        stock: { gt: 0 },
-      };
+      // Build filters using AND to avoid overwriting OR conditions
+      const andFilters: any[] = [{ stock: { gt: 0 } }];
 
       if (categoryId) {
-        where.categoryId = categoryId;
+        andFilters.push({ categoryId });
       }
 
       // Price filtering considering discounts
       if (minPrice || maxPrice) {
-        where.OR = [{ price: {} }, { discountedPrice: {} }];
-
+        const priceFilter: any = { OR: [{ price: {} }, { discountedPrice: {} }] };
         if (minPrice) {
-          where.OR[0].price.gte = minPrice;
-          where.OR[1].discountedPrice.gte = minPrice;
+          priceFilter.OR[0].price.gte = minPrice;
+          priceFilter.OR[1].discountedPrice.gte = minPrice;
         }
         if (maxPrice) {
-          where.OR[0].price.lte = maxPrice;
-          where.OR[1].discountedPrice.lte = maxPrice;
+          priceFilter.OR[0].price.lte = maxPrice;
+          priceFilter.OR[1].discountedPrice.lte = maxPrice;
         }
+        andFilters.push(priceFilter);
       }
 
       // Filter for products on sale
       if (onSale) {
-        where.OR = [
-          { discountedPrice: { not: null } },
-          { discountPercent: { gt: 0 } },
-        ];
+        andFilters.push({
+          OR: [
+            { discountedPrice: { not: null } },
+            { discountPercent: { gt: 0 } },
+          ],
+        });
       }
+
+      const where = { AND: andFilters };
 
       const orderBy: any = {};
       orderBy[sortBy] = sortOrder;
 
-      const products = await prisma.product.findMany({
-        where,
-        include: {
-          images: true,
-          category: true,
-        },
-        skip,
-        take: limit,
-        orderBy,
-      });
+      // Fetch products and total count in parallel for better performance
+      const [products, total] = await Promise.all([
+        prisma.product.findMany({
+          where,
+          include: {
+            images: true,
+            category: true,
+          },
+          skip,
+          take: limit,
+          orderBy,
+        }),
+        prisma.product.count({ where }),
+      ]);
 
       // Calculate final price for each product
       const productsWithDiscount = products.map((product) => {
@@ -98,8 +105,6 @@ export class ProductController {
         };
       });
 
-      const total = await prisma.product.count({ where });
-
       res.status(200).json({
         success: true,
         data: {
@@ -109,6 +114,8 @@ export class ProductController {
             limit,
             total,
             totalPages: Math.ceil(total / limit),
+            hasNextPage: page * limit < total,
+            hasPrevPage: page > 1,
           },
         },
       });
@@ -457,22 +464,24 @@ export class ProductController {
       const limit = parseInt(req.query.limit as string) || 20;
       const skip = (page - 1) * limit;
 
-      const products = await prisma.product.findMany({
-        where: {
-          OR: [
-            { discountedPrice: { not: null } },
-            { discountPercent: { gt: 0 } },
-          ],
-          stock: { gt: 0 },
-        },
-        include: {
-          images: true,
-          category: true,
-        },
-        skip,
-        take: limit,
-        orderBy: { createdAt: "desc" },
-      });
+      const where = {
+        OR: [{ discountedPrice: { not: null } }, { discountPercent: { gt: 0 } }],
+        stock: { gt: 0 },
+      };
+
+      const [products, total] = await Promise.all([
+        prisma.product.findMany({
+          where,
+          include: {
+            images: true,
+            category: true,
+          },
+          skip,
+          take: limit,
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.product.count({ where }),
+      ]);
 
       const productsWithDiscount = products.map((product) => {
         const finalPrice = DiscountService.calculateFinalPrice(
@@ -501,16 +510,6 @@ export class ProductController {
         };
       });
 
-      const total = await prisma.product.count({
-        where: {
-          OR: [
-            { discountedPrice: { not: null } },
-            { discountPercent: { gt: 0 } },
-          ],
-          stock: { gt: 0 },
-        },
-      });
-
       res.status(200).json({
         success: true,
         data: {
@@ -520,6 +519,8 @@ export class ProductController {
             limit,
             total,
             totalPages: Math.ceil(total / limit),
+            hasNextPage: page * limit < total,
+            hasPrevPage: page > 1,
           },
         },
       });

@@ -91,7 +91,7 @@ model Category {
 model Product {
   id          String @id @default(uuid())
   name        String
-  description String
+  description String?
   price       Decimal @db.Decimal(10, 2)
   discountedPrice Decimal? @db.Decimal(10, 2)
   discountPercent Int? @default(0)
