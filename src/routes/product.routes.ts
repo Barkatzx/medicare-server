@@ -49,6 +49,15 @@ router.delete(
   ProductController.deleteProductImage,
 );
 
+router.patch(
+  "/:productId/images/:imageId/default",
+  authenticateToken,
+  authorizeAdmin,
+  invalidateCache("cache:*:*products*"),
+  ProductController.setDefaultImage,
+);
+
+
 router.put(
   "/:id",
   authenticateToken,

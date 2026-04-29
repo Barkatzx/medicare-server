@@ -271,9 +271,11 @@ export class ProductController {
                   create: imageUrls.map((url, index) => ({
                     url,
                     altText: `${name} image ${index + 1}`,
+                    isDefault: index === 0,
                   })),
                 }
               : undefined,
+
         },
         include: {
           images: true,
@@ -515,6 +517,7 @@ export class ProductController {
 
       const product = await prisma.product.findUnique({
         where: { id },
+        include: { images: true },
       });
 
       if (!product) {
@@ -530,12 +533,15 @@ export class ProductController {
         "products",
       );
 
+      const hasDefault = product.images.some((img) => img.isDefault);
+
       // Add images to product
-      const images = await prisma.productImage.createMany({
+      await prisma.productImage.createMany({
         data: imageUrls.map((url, index) => ({
           url,
           altText: `${product.name} image`,
           productId: id,
+          isDefault: !hasDefault && index === 0,
         })),
       });
 
@@ -552,6 +558,7 @@ export class ProductController {
       });
     }
   }
+
 
   static async deleteProductImage(req: AuthRequest, res: Response) {
     try {
@@ -571,6 +578,8 @@ export class ProductController {
         });
       }
 
+      const wasDefault = image.isDefault;
+
       // Delete from storage
       await ImageService.deleteImage(image.url);
 
@@ -578,6 +587,20 @@ export class ProductController {
       await prisma.productImage.delete({
         where: { id: imageId },
       });
+
+      // If we deleted the default image, set another one as default if exists
+      if (wasDefault) {
+        const nextImage = await prisma.productImage.findFirst({
+          where: { productId: productId },
+        });
+
+        if (nextImage) {
+          await prisma.productImage.update({
+            where: { id: nextImage.id },
+            data: { isDefault: true },
+          });
+        }
+      }
 
       res.status(200).json({
         success: true,
@@ -591,6 +614,53 @@ export class ProductController {
       });
     }
   }
+
+  static async setDefaultImage(req: AuthRequest, res: Response) {
+    try {
+      const { productId, imageId } = req.params;
+
+      // Check if image exists and belongs to the product
+      const image = await prisma.productImage.findFirst({
+        where: {
+          id: imageId,
+          productId: productId,
+        },
+      });
+
+      if (!image) {
+        return res.status(404).json({
+          success: false,
+          error: "Image not found or does not belong to this product",
+        });
+      }
+
+      // Start a transaction to ensure atomicity
+      await prisma.$transaction([
+        // Set all images for this product to not default
+        prisma.productImage.updateMany({
+          where: { productId: productId },
+          data: { isDefault: false },
+        }),
+        // Set the selected image to default
+        prisma.productImage.update({
+          where: { id: imageId },
+          data: { isDefault: true },
+        }),
+      ]);
+
+      res.status(200).json({
+        success: true,
+        message: "Default image set successfully",
+      });
+    } catch (error) {
+      console.error("Set default image error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to set default image",
+      });
+    }
+  }
+
 
   static async searchProducts(req: Request, res: Response) {
     try {

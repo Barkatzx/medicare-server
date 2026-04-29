@@ -116,9 +116,11 @@ model ProductImage {
   altText   String?
   productId String
   product   Product @relation(fields: [productId], references: [id])
+  isDefault Boolean @default(false)
   createdAt DateTime @default(now())
   @@index([productId])
 }
+
 
 model Cart {
   id     String @id @default(uuid())
