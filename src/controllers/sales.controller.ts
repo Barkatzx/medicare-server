@@ -330,67 +330,142 @@ export class SalesController {
   // Add this to sales.controller.ts
   static async getDashboardStats(req: AuthRequest, res: Response) {
     try {
-      const today = new Date();
+      const now = new Date();
+      const today = new Date(now);
+      today.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(now);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+      const endOfYesterday = new Date(yesterday);
+      endOfYesterday.setHours(23, 59, 59, 999);
+
       const startOfWeek = new Date(today);
       startOfWeek.setDate(today.getDate() - today.getDay());
+
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
       const startOfYear = new Date(today.getFullYear(), 0, 1);
 
-      const [todaySales, weekSales, monthSales, yearSales, summary, growth] =
-        await Promise.all([
-          SalesService.getDailySales(today),
-          SalesService.getSalesData(startOfWeek, today),
-          SalesService.getSalesData(startOfMonth, today),
-          SalesService.getSalesData(startOfYear, today),
-          SalesService.getSalesSummary(),
-          SalesService.getSalesGrowth(),
-        ]);
+      // Growth periods
+      const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const prev7Days = new Date(last7Days.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-      // Get recent orders
-      const recentOrders = await prisma.order.findMany({
-        take: 10,
-        orderBy: { createdAt: "desc" },
-        include: {
-          user: {
-            select: {
-              name: true,
-              email: true,
+      const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const prev30Days = new Date(last30Days.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      const lastYear = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+      const prevYear = new Date(lastYear.getTime() - 365 * 24 * 60 * 60 * 1000);
+
+      // Optimized query helper
+      const getStatsForRange = async (start: Date, end: Date) => {
+        // Execute sequentially to respect connection limits
+        const orderStats = await prisma.order.aggregate({
+          where: {
+            createdAt: { gte: start, lte: end },
+            status: { not: "cancelled" },
+            payment: { status: "paid" },
+          },
+          _sum: { totalAmount: true },
+          _count: { id: true },
+        });
+
+        const itemStats = await prisma.orderItem.aggregate({
+          where: {
+            order: {
+              createdAt: { gte: start, lte: end },
+              status: { not: "cancelled" },
+              payment: { status: "paid" },
             },
           },
-          payment: true,
-        },
-      });
+          _sum: { quantity: true },
+        });
+
+        return {
+          sales: Number(orderStats._sum.totalAmount || 0),
+          orders: orderStats._count.id || 0,
+          items: Number(itemStats._sum.quantity || 0),
+        };
+      };
+
+      // Execute stats queries sequentially or in small batches to avoid pool timeouts
+      // especially when connection_limit is low
+      const todayStats = await getStatsForRange(today, endOfDay);
+      const weekStats = await getStatsForRange(startOfWeek, now);
+      const monthStats = await getStatsForRange(startOfMonth, now);
+      const yearStats = await getStatsForRange(startOfYear, now);
+
+      // Fetch lifetime and recent orders in a small parallel batch
+      const [
+        lifetimeOrderStats,
+        lifetimeItemStats,
+        uniqueCustomers,
+        recentOrders,
+      ] = await Promise.all([
+        prisma.order.aggregate({
+          where: { status: { not: "cancelled" }, payment: { status: "paid" } },
+          _sum: { totalAmount: true },
+          _count: { id: true },
+        }),
+        prisma.orderItem.aggregate({
+          where: {
+            order: { status: { not: "cancelled" }, payment: { status: "paid" } },
+          },
+          _sum: { quantity: true },
+        }),
+        prisma.order.findMany({
+          where: { status: { not: "cancelled" }, payment: { status: "paid" } },
+          select: { userId: true },
+          distinct: ["userId"],
+        }),
+        prisma.order.findMany({
+          take: 10,
+          orderBy: { createdAt: "desc" },
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
+            payment: true,
+          },
+        }),
+      ]);
+
+      // Fetch growth comparison stats sequentially
+      const yesterdayStats = await getStatsForRange(yesterday, endOfYesterday);
+      const last7DaysStats = await getStatsForRange(last7Days, now);
+      const prev7DaysStats = await getStatsForRange(prev7Days, last7Days);
+      const last30DaysStats = await getStatsForRange(last30Days, now);
+      const prev30DaysStats = await getStatsForRange(prev30Days, last30Days);
+      const lastYearStats = await getStatsForRange(lastYear, now);
+      const prevYearStats = await getStatsForRange(prevYear, lastYear);
+
+      const calculateGrowth = (current: number, previous: number) => {
+        if (previous === 0) return current > 0 ? 100 : 0;
+        return ((current - previous) / previous) * 100;
+      };
 
       res.status(200).json({
         success: true,
         data: {
-          today: {
-            sales: todaySales.totalSales,
-            orders: todaySales.totalOrders,
-            items: todaySales.totalItemsSold,
-          },
-          this_week: {
-            sales: weekSales.totalSales,
-            orders: weekSales.totalOrders,
-            items: weekSales.totalItemsSold,
-          },
-          this_month: {
-            sales: monthSales.totalSales,
-            orders: monthSales.totalOrders,
-            items: monthSales.totalItemsSold,
-          },
-          this_year: {
-            sales: yearSales.totalSales,
-            orders: yearSales.totalOrders,
-            items: yearSales.totalItemsSold,
-          },
+          today: todayStats,
+          this_week: weekStats,
+          this_month: monthStats,
+          this_year: yearStats,
           lifetime: {
-            sales: summary.totalSales,
-            orders: summary.totalOrders,
-            customers: summary.totalCustomers,
-            products_sold: summary.totalItemsSold,
+            sales: Number(lifetimeOrderStats._sum.totalAmount || 0),
+            orders: lifetimeOrderStats._count.id || 0,
+            customers: uniqueCustomers.length,
+            products_sold: Number(lifetimeItemStats._sum.quantity || 0),
           },
-          growth,
+          growth: {
+            daily: calculateGrowth(todayStats.sales, yesterdayStats.sales),
+            weekly: calculateGrowth(last7DaysStats.sales, prev7DaysStats.sales),
+            monthly: calculateGrowth(last30DaysStats.sales, prev30DaysStats.sales),
+            yearly: calculateGrowth(lastYearStats.sales, prevYearStats.sales),
+          },
           recent_orders: recentOrders,
         },
       });
