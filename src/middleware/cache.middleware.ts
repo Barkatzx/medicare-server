@@ -25,7 +25,7 @@ export const cacheRoute = (ttlSeconds: number) => {
 
       if (cachedData) {
         console.log(`[Cache] HIT: ${key}`);
-        return res.status(200).json(JSON.parse(cachedData));
+        return res.status(200).json(cachedData);
       }
 
       console.log(`[Cache] MISS: ${key}`);
@@ -48,9 +48,8 @@ export const cacheRoute = (ttlSeconds: number) => {
       inFlightRequests.set(key, inFlightPromise);
 
       res.json = (body: any) => {
-        // Only cache successful responses
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          redisClient.setEx(key, ttlSeconds, JSON.stringify(body));
+          redisClient.setex(key, ttlSeconds, body);
         }
         
         // Resolve the in-flight promise and cleanup
@@ -88,7 +87,7 @@ export const invalidateCache = (pattern: string) => {
           
           const keys = await redisClient.keys(finalPattern);
           if (keys.length > 0) {
-            await redisClient.del(keys);
+            await redisClient.del(...keys);
             console.log(`[Cache] DELETED ${keys.length} keys`);
           }
         } catch (error) {
