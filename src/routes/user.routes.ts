@@ -29,6 +29,7 @@ router.put(
   invalidateCache("cache:{userId}:/api/users/profile*"),
   UserController.updateProfile,
 );
+
 router.post(
   "/change-password",
   authenticateToken,
@@ -150,6 +151,12 @@ router.put(
   authenticateToken,
   authorizeAdmin,
   UserController.approveUser,
+);
+router.delete(
+  "/:userId",
+  authenticateToken,
+  authorizeAdmin,
+  UserController.deleteProfile,
 );
 router.post(
   "/notifications/send",

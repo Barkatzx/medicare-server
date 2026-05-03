@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { prisma } from "../config/supabase";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { AuthService } from "../services/auth.service";
+import redisClient from "../config/redis";
 interface AddressInput {
   street: string;
   city: string;
@@ -161,6 +162,47 @@ export class UserController {
       res
         .status(400)
         .json({ error: error.message || "Failed to update profile" });
+    }
+  }
+
+  // Delete user profile
+  static async deleteProfile(req: AuthRequest, res: Response) {
+    try {
+      const { userId } = req.params;
+
+      if (!userId) {
+        return res.status(400).json({ error: "User ID is required" });
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      await prisma.user.delete({
+        where: { id: userId },
+      });
+
+      // Clear user's Redis cache
+      try {
+        const keys = await redisClient.keys(`cache:${userId}:*`);
+        if (keys.length > 0) {
+          await redisClient.del(...keys);
+          console.log(`[Cache] DELETED ${keys.length} keys for user ${userId}`);
+        }
+      } catch (redisError) {
+        console.error("Redis Cache Invalidation Error on Profile Delete:", redisError);
+      }
+
+      res.status(200).json({ message: "User profile deleted successfully" });
+    } catch (error: any) {
+      console.error("Delete profile error:", error);
+      res
+        .status(500)
+        .json({ error: error.message || "Failed to delete profile" });
     }
   }
 
