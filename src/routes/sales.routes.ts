@@ -39,4 +39,7 @@ router.get("/export", SalesController.exportSalesReport);
 // See Dashboard Statistics
 router.get("/dashboard", cacheRoute(300), SalesController.getDashboardStats);
 
+// Today's ordered products summary
+router.get("/today-ordered-products", cacheRoute(300), SalesController.getTodayOrderedProducts);
+
 export default router;

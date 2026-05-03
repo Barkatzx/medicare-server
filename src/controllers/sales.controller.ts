@@ -477,4 +477,74 @@ export class SalesController {
       });
     }
   }
+  /**
+   * Get today's ordered products summary
+   */
+  static async getTodayOrderedProducts(req: AuthRequest, res: Response) {
+    try {
+      const now = new Date();
+      const today = new Date(now);
+      today.setHours(0, 0, 0, 0);
+
+      // Fetch all order items from today's non-cancelled orders
+      const items = await prisma.orderItem.findMany({
+        where: {
+          order: {
+            createdAt: { gte: today },
+            status: { not: "cancelled" },
+          },
+        },
+        include: {
+          product: {
+            select: { name: true },
+          },
+        },
+      });
+
+      const productMap = new Map();
+      let grandTotalQuantity = 0;
+      let grandTotalPrice = 0;
+
+      items.forEach((item) => {
+        if (!productMap.has(item.productId)) {
+          productMap.set(item.productId, {
+            id: item.productId,
+            name: item.product.name,
+            quantity: 0,
+            totalPrice: 0,
+          });
+        }
+        
+        const prod = productMap.get(item.productId);
+        const itemTotalPrice = Number(item.price) * item.quantity;
+        
+        prod.quantity += item.quantity;
+        prod.totalPrice += itemTotalPrice;
+        
+        grandTotalQuantity += item.quantity;
+        grandTotalPrice += itemTotalPrice;
+      });
+
+      const orderedProducts = Array.from(productMap.values());
+
+      res.status(200).json({
+        success: true,
+        data: {
+          products: orderedProducts,
+          summary: {
+            totalProducts: orderedProducts.length,
+            totalQuantity: grandTotalQuantity,
+            totalRevenue: grandTotalPrice,
+          }
+        },
+        message: "Today's ordered products retrieved successfully",
+      });
+    } catch (error) {
+      console.error("Get today ordered products error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch today's ordered products",
+      });
+    }
+  }
 }
