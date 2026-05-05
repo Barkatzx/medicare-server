@@ -444,7 +444,8 @@ export class SalesController {
 
       const calculateGrowth = (current: number, previous: number) => {
         if (previous === 0) return current > 0 ? 100 : 0;
-        return ((current - previous) / previous) * 100;
+        const growth = ((current - previous) / previous) * 100;
+        return Number(growth.toFixed(2));
       };
 
       res.status(200).json({
