@@ -1,7 +1,6 @@
 node_modules
-# Keep environment variables out of version control
 .env
-# Production builds
+.env.docker
 dist/
 build/
 out/

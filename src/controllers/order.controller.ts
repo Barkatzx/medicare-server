@@ -107,7 +107,7 @@ export class OrderController {
                 return {
                   productId: item.productId,
                   quantity: item.quantity,
-                  price: finalPrice, // Store the discounted price in order item
+                  price: finalPrice,
                 };
               }),
             },
@@ -149,13 +149,13 @@ export class OrderController {
         // Create notification with savings info
         const totalSavings = totalOriginalAmount - totalAmount;
         const savingsMessage =
-          totalSavings > 0 ? ` You saved $${totalSavings.toFixed(2)}!` : "";
+          totalSavings > 0 ? ` You saved ${totalSavings.toFixed(2)}৳!` : "";
 
         await tx.notification.create({
           data: {
             userId,
             title: "Order Placed Successfully",
-            message: `Your order #${order.id} has been placed successfully. Total amount: $${totalAmount}${savingsMessage}`,
+            message: `Your order #${order.id} has been placed successfully. Total amount: ${totalAmount}${savingsMessage}৳`,
             type: "order",
           },
         });
@@ -380,6 +380,7 @@ export class OrderController {
               name: true,
               email: true,
               phone_number: true,
+              pharmacy_name: true,
             },
           },
           items: {
@@ -431,6 +432,7 @@ export class OrderController {
               name: true,
               email: true,
               phone_number: true,
+              pharmacy_name: true,
             },
           },
           items: {
