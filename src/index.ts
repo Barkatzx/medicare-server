@@ -24,15 +24,14 @@ app.use(express.urlencoded({ extended: true }));
 // Connect to Redis
 connectRedis();
 
-// Global Cache Middleware - Removed for route-level control
-// app.use(cacheMiddleware);
+// Global Cache Middleware - Removed to allow route-specific caching
 
 // Routes
-app.use("/api/users", userRoutes);
-app.use("/api/categories", categoryRoutes);
-app.use("/api/products", productRoutes);
-app.use("/api/orders", orderRoutes);
-app.use("/api/sales", salesRoutes);
+app.use("/v1/users", userRoutes);
+app.use("/v1/categories", categoryRoutes);
+app.use("/v1/products", productRoutes);
+app.use("/v1/orders", orderRoutes);
+app.use("/v1/sales", salesRoutes);
 
 // Health check
 app.get("/", (req, res) => {
