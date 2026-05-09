@@ -101,6 +101,8 @@ model Product {
   images     ProductImage[]
   cartItems  CartItem[]
   orderItems OrderItem[]
+  featured   Boolean @default(false)
+  trending   Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([categoryId])
@@ -108,6 +110,8 @@ model Product {
   @@index([price])
   @@index([stock])
   @@index([discountedPrice])
+  @@index([featured])
+  @@index([trending])
 }
 
 model ProductImage {

@@ -12,7 +12,8 @@ const router = Router();
 
 // ==================== PUBLIC ROUTES ====================
 router.get("/", cacheRoute(300), ProductController.getAllProducts);
-router.get("/on-sale", cacheRoute(300), ProductController.getProductsOnSale);
+router.get("/trending", ProductController.getTrendingProducts);
+router.get("/featured", ProductController.getFeaturedProducts);
 router.get("/search", cacheRoute(60), ProductController.searchProducts); // Shorter cache for search
 router.get("/:id", cacheRoute(300), ProductController.getProductById);
 
@@ -79,6 +80,22 @@ router.patch(
   authorizeAdmin,
   invalidateCache("cache:*:*products*"),
   ProductController.updateStock,
+);
+
+router.patch(
+  "/:id/trending",
+  authenticateToken,
+  authorizeAdmin,
+  invalidateCache("cache:*:*products*"),
+  ProductController.updateTrendingStatus,
+);
+
+router.patch(
+  "/:id/featured",
+  authenticateToken,
+  authorizeAdmin,
+  invalidateCache("cache:*:*products*"),
+  ProductController.updateFeaturedStatus,
 );
 
 export default router;

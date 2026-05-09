@@ -4,7 +4,7 @@ import { prisma } from "../config/supabase";
 import { DiscountService } from "../services/discount.service";
 import { ImageService } from "../services/image.service";
 import { AuthRequest } from "../types";
-
+import { ProductService } from "../services/product.service";
 export class ProductController {
   // Get all products with discount calculation
   static async getAllProducts(req: Request, res: Response) {
@@ -437,6 +437,8 @@ export class ProductController {
         product.discountPercent,
       );
 
+      await ProductService.invalidateProductCaches();
+
       res.status(200).json({
         success: true,
         data: {
@@ -462,78 +464,94 @@ export class ProductController {
     }
   }
 
-  // Get products on sale
-  static async getProductsOnSale(req: Request, res: Response) {
+  // Get trending products
+  static async getTrendingProducts(req: Request, res: Response) {
     try {
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 20;
-      const skip = (page - 1) * limit;
-
-      const where = {
-        OR: [{ discountedPrice: { not: null } }, { discountPercent: { gt: 0 } }],
-        stock: { gt: 0 },
-      };
-
-      const [products, total] = await Promise.all([
-        prisma.product.findMany({
-          where,
-          include: {
-            images: true,
-            category: true,
-          },
-          skip,
-          take: limit,
-          orderBy: { createdAt: "desc" },
-        }),
-        prisma.product.count({ where }),
-      ]);
-
-      const productsWithDiscount = products.map((product) => {
-        const finalPrice = DiscountService.calculateFinalPrice(
-          Number(product.price),
-          product.discountedPrice ? Number(product.discountedPrice) : null,
-          product.discountPercent,
-        );
-
-        return {
-          ...product,
-          price: Number(product.price),
-          discountedPrice: product.discountedPrice
-            ? Number(product.discountedPrice)
-            : null,
-          finalPrice,
-          savings: DiscountService.calculateSavings(
-            Number(product.price),
-            finalPrice,
-          ),
-          discountPercent:
-            product.discountPercent ||
-            DiscountService.calculateDiscountPercent(
-              Number(product.price),
-              finalPrice,
-            ),
-        };
+      const products = await ProductService.getTrendingProducts();
+      res.status(200).json({
+        success: true,
+        data: products,
       });
+    } catch (error) {
+      console.error("Get trending products error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch trending products",
+      });
+    }
+  }
+
+  // Get featured products
+  static async getFeaturedProducts(req: Request, res: Response) {
+    try {
+      const products = await ProductService.getFeaturedProducts();
+      res.status(200).json({
+        success: true,
+        data: products,
+      });
+    } catch (error) {
+      console.error("Get featured products error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch featured products",
+      });
+    }
+  }
+
+  // Update trending status
+  static async updateTrendingStatus(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const { trending } = req.body;
+
+      if (typeof trending !== "boolean") {
+        return res.status(400).json({
+          success: false,
+          error: "Trending status must be a boolean",
+        });
+      }
+
+      const product = await ProductService.updateTrendingStatus(id, trending);
 
       res.status(200).json({
         success: true,
-        data: {
-          products: productsWithDiscount,
-          pagination: {
-            page,
-            limit,
-            total,
-            totalPages: Math.ceil(total / limit),
-            hasNextPage: page * limit < total,
-            hasPrevPage: page > 1,
-          },
-        },
+        data: product,
+        message: "Trending status updated successfully",
       });
-    } catch (error) {
-      console.error("Get sale products error:", error);
+    } catch (error: any) {
+      console.error("Update trending status error:", error);
       res.status(500).json({
         success: false,
-        error: "Failed to fetch sale products",
+        error: error.message || "Failed to update trending status",
+      });
+    }
+  }
+
+  // Update featured status
+  static async updateFeaturedStatus(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const { featured } = req.body;
+
+      if (typeof featured !== "boolean") {
+        return res.status(400).json({
+          success: false,
+          error: "Featured status must be a boolean",
+        });
+      }
+
+      const product = await ProductService.updateFeaturedStatus(id, featured);
+
+      res.status(200).json({
+        success: true,
+        data: product,
+        message: "Featured status updated successfully",
+      });
+    } catch (error: any) {
+      console.error("Update featured status error:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message || "Failed to update featured status",
       });
     }
   }
@@ -856,6 +874,8 @@ export class ProductController {
         where: { id },
       });
 
+      await ProductService.invalidateProductCaches();
+
       res.status(200).json({
         success: true,
         message: "Product deleted successfully",
@@ -902,6 +922,8 @@ export class ProductController {
         where: { id },
         data: { stock: newStock },
       });
+
+      await ProductService.invalidateProductCaches();
 
       res.status(200).json({
         success: true,
