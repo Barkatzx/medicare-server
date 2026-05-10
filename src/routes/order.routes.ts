@@ -15,7 +15,7 @@ router.post(
   "/",
   authenticateToken,
   authorizeApproved,
-  invalidateCache("cache:{userId}:/api/orders*"),
+  invalidateCache("cache:{userId}:/v1/orders*"),
   invalidateCache("cache:*:*sales*"),
   OrderController.createOrder,
 );
@@ -36,7 +36,7 @@ router.put(
   "/:orderId/cancel",
   authenticateToken,
   authorizeApproved,
-  invalidateCache("cache:{userId}:/api/orders*"),
+  invalidateCache("cache:{userId}:/v1/orders*"),
   invalidateCache("cache:*:*sales*"),
   OrderController.cancelOrder,
 );

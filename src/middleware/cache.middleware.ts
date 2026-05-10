@@ -74,8 +74,8 @@ export const cacheRoute = (ttlSeconds: number) => {
  * This avoids expensive KEYS scans over the entire Redis keyspace (critical for Upstash HTTP-based Redis).
  */
 const DETERMINISTIC_KEYS: Record<string, string[]> = {
-  "/api/users/profile*": ["/api/users/profile"],
-  "/api/users/addresses*": ["/api/users/addresses"],
+  "/v1/users/profile*": ["/v1/users/profile"],
+  "/v1/users/addresses*": ["/v1/users/addresses"],
 };
 
 /**

@@ -26,7 +26,7 @@ router.put(
   "/profile",
   authenticateToken,
   authorizeApproved,
-  invalidateCache("cache:{userId}:/api/users/profile*"),
+  invalidateCache("cache:{userId}:/v1/users/profile*"),
   UserController.updateProfile,
 );
 
@@ -49,28 +49,32 @@ router.post(
   "/addresses",
   authenticateToken,
   authorizeApproved,
-  invalidateCache("cache:{userId}:/api/users/addresses*"),
+  invalidateCache("cache:{userId}:/v1/users/addresses*"),
+  invalidateCache("cache:{userId}:/v1/users/profile*"),
   UserController.addAddress,
 );
 router.put(
   "/addresses/:addressId/default",
   authenticateToken,
   authorizeApproved,
-  invalidateCache("cache:{userId}:/api/users/addresses*"),
+  invalidateCache("cache:{userId}:/v1/users/addresses*"),
+  invalidateCache("cache:{userId}:/v1/users/profile*"),
   UserController.setDefaultAddress,
 ); // must be before /:addressId
 router.put(
   "/addresses/:addressId",
   authenticateToken,
   authorizeApproved,
-  invalidateCache("cache:{userId}:/api/users/addresses*"),
+  invalidateCache("cache:{userId}:/v1/users/addresses*"),
+  invalidateCache("cache:{userId}:/v1/users/profile*"),
   UserController.updateAddress,
 );
 router.delete(
   "/addresses/:addressId",
   authenticateToken,
   authorizeApproved,
-  invalidateCache("cache:{userId}:/api/users/addresses*"),
+  invalidateCache("cache:{userId}:/v1/users/addresses*"),
+  invalidateCache("cache:{userId}:/v1/users/profile*"),
   UserController.deleteAddress,
 );
 
