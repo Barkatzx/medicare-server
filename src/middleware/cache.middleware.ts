@@ -69,7 +69,19 @@ export const cacheRoute = (ttlSeconds: number) => {
 };
 
 /**
- * Middleware to clear cache after successful mutation
+ * Known cache key suffixes for deterministic invalidation.
+ * Maps a base path pattern to all exact cache paths that should be cleared.
+ * This avoids expensive KEYS scans over the entire Redis keyspace (critical for Upstash HTTP-based Redis).
+ */
+const DETERMINISTIC_KEYS: Record<string, string[]> = {
+  "/api/users/cart*": ["/api/users/cart", "/api/users/cart/count"],
+  "/api/users/profile*": ["/api/users/profile"],
+  "/api/users/addresses*": ["/api/users/addresses"],
+};
+
+/**
+ * Middleware to clear cache after successful mutation.
+ * Uses deterministic key deletion when possible to avoid KEYS scan latency.
  * @param pattern The pattern to clear, e.g., "cache:public:/api/products*" or "cache:{userId}:/api/users/cart*"
  */
 export const invalidateCache = (pattern: string) => {
@@ -82,13 +94,24 @@ export const invalidateCache = (pattern: string) => {
         try {
           const userId = req.user?.id || "public";
           const finalPattern = pattern.replace("{userId}", userId);
-          
-          console.log(`[Cache] INVALIDATING: ${finalPattern}`);
-          
-          const keys = await redisClient.keys(finalPattern);
-          if (keys.length > 0) {
-            await redisClient.del(...keys);
-            console.log(`[Cache] DELETED ${keys.length} keys`);
+
+          // Extract the path portion after "cache:{userId}:"
+          const pathPattern = finalPattern.replace(`cache:${userId}:`, "");
+          const knownKeys = DETERMINISTIC_KEYS[pathPattern];
+
+          if (knownKeys) {
+            // Fast path: delete exact keys directly (single HTTP call)
+            const exactKeys = knownKeys.map((k) => `cache:${userId}:${k}`);
+            await redisClient.del(...exactKeys);
+            console.log(`[Cache] DELETED (deterministic): ${exactKeys.join(", ")}`);
+          } else {
+            // Slow fallback: KEYS scan for non-deterministic patterns (e.g., product cache)
+            console.log(`[Cache] INVALIDATING (scan): ${finalPattern}`);
+            const keys = await redisClient.keys(finalPattern);
+            if (keys.length > 0) {
+              await redisClient.del(...keys);
+              console.log(`[Cache] DELETED ${keys.length} keys`);
+            }
           }
         } catch (error) {
           console.error("Redis Cache Invalidation Error:", error);
