@@ -106,4 +106,67 @@ router.post(
   UserController.sendBulkNotifications,
 );
 
+// ==================== NOTIFICATION ROUTES ====================
+router.get(
+  "/notifications",
+  authenticateToken,
+  authorizeApproved,
+  UserController.getNotifications,
+);
+router.put(
+  "/notifications/read-all",
+  authenticateToken,
+  authorizeApproved,
+  UserController.markAllNotificationsRead,
+);
+router.put(
+  "/notifications/:notificationId",
+  authenticateToken,
+  authorizeApproved,
+  UserController.markNotificationRead,
+);
+// ==================== CART ROUTES ====================
+router.get(
+  "/cart",
+  authenticateToken,
+  authorizeApproved,
+  cacheRoute(300),
+  CartController.getCart,
+);
+router.get(
+  "/cart/count",
+  authenticateToken,
+  authorizeApproved,
+  cacheRoute(300),
+  CartController.getCartItemCount,
+);
+router.post(
+  "/cart/add",
+  authenticateToken,
+  authorizeApproved,
+  invalidateCache("cache:{userId}:/api/users/cart*"),
+  CartController.addToCart,
+);
+router.put(
+  "/cart/item/:itemId",
+  authenticateToken,
+  authorizeApproved,
+  invalidateCache("cache:{userId}:/api/users/cart*"),
+  CartController.updateCartItem,
+);
+router.delete(
+  "/cart/item/:itemId",
+  authenticateToken,
+  authorizeApproved,
+  invalidateCache("cache:{userId}:/api/users/cart*"),
+  CartController.removeFromCart,
+);
+router.delete(
+  "/cart/clear",
+  authenticateToken,
+  authorizeApproved,
+  invalidateCache("cache:{userId}:/api/users/cart*"),
+  CartController.clearCart,
+);
+
 export default router;
