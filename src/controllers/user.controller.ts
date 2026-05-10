@@ -657,11 +657,11 @@ export class UserController {
           throw new Error("Cannot delete address that is used in orders");
         }
 
-        await tx.address.delete({ where: { id: addressId } });
-
+        // If this is the default address, we need to handle User.defaultAddressId first
+        // to avoid foreign key constraint violation
         if (address.isDefault) {
           const anotherAddress = await tx.address.findFirst({
-            where: { userId },
+            where: { userId, NOT: { id: addressId } },
             orderBy: { createdAt: "asc" },
           });
 
@@ -680,7 +680,22 @@ export class UserController {
               data: { defaultAddressId: null },
             });
           }
+        } else {
+          // Double check User.defaultAddressId even if address.isDefault is false
+          const user = await tx.user.findUnique({
+            where: { id: userId },
+            select: { defaultAddressId: true },
+          });
+
+          if (user?.defaultAddressId === addressId) {
+            await tx.user.update({
+              where: { id: userId },
+              data: { defaultAddressId: null },
+            });
+          }
         }
+
+        await tx.address.delete({ where: { id: addressId } });
       });
 
       res.status(200).json({ message: "Address deleted successfully" });
