@@ -498,6 +498,40 @@ export class ProductController {
     }
   }
 
+  // Get products added in the last 15 days
+  static async getNewProducts(req: Request, res: Response) {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+
+      const { products, total } = await ProductService.getNewProducts(
+        page,
+        limit,
+      );
+
+      res.status(200).json({
+        success: true,
+        data: {
+          products,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+            hasNextPage: page * limit < total,
+            hasPrevPage: page > 1,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Get new products error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch new products",
+      });
+    }
+  }
+
   // Update trending status
   static async updateTrendingStatus(req: AuthRequest, res: Response) {
     try {

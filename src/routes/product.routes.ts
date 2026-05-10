@@ -14,6 +14,7 @@ const router = Router();
 router.get("/", cacheRoute(300), ProductController.getAllProducts);
 router.get("/trending", ProductController.getTrendingProducts);
 router.get("/featured", ProductController.getFeaturedProducts);
+router.get("/new", ProductController.getNewProducts);
 router.get("/search", cacheRoute(60), ProductController.searchProducts); // Shorter cache for search
 router.get("/:id", cacheRoute(300), ProductController.getProductById);
 

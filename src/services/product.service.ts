@@ -41,7 +41,11 @@ export class ProductService {
    * Invalidates product-related caches
    */
   static async invalidateProductCaches() {
-    await redisClient.del("products:trending", "products:featured");
+    await redisClient.del(
+      "products:trending",
+      "products:featured",
+      "products:new",
+    );
   }
 
   /**
@@ -159,5 +163,61 @@ export class ProductService {
 
     const formattedProducts = this.formatProducts([updatedProduct]);
     return formattedProducts[0];
+  }
+
+  /**
+   * Get products added in the last 15 days (cached with pagination)
+   */
+  static async getNewProducts(
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{ products: any[]; total: number }> {
+    const skip = (page - 1) * limit;
+    const cacheKey = `products:new:${page}:${limit}`;
+    const cachedData = await redisClient.get<{
+      products: any[];
+      total: number;
+    }>(cacheKey);
+
+    if (cachedData) {
+      return cachedData;
+    }
+
+    // Calculate the date 15 days ago
+    const fifteenDaysAgo = new Date();
+    fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+
+    const where = {
+      createdAt: {
+        gte: fifteenDaysAgo,
+      },
+      stock: { gt: 0 },
+    };
+
+    const [products, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        include: {
+          images: true,
+          category: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.product.count({ where }),
+    ]);
+
+    const formattedProducts = this.formatProducts(products);
+    const responseData = {
+      products: formattedProducts,
+      total,
+    };
+
+    await redisClient.setex(cacheKey, this.CACHE_TTL, responseData);
+
+    return responseData;
   }
 }
