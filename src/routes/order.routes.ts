@@ -15,7 +15,6 @@ router.post(
   "/",
   authenticateToken,
   authorizeApproved,
-  invalidateCache("cache:{userId}:/api/users/cart*"),
   invalidateCache("cache:{userId}:/api/orders*"),
   invalidateCache("cache:*:*sales*"),
   OrderController.createOrder,

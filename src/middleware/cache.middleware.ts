@@ -74,7 +74,6 @@ export const cacheRoute = (ttlSeconds: number) => {
  * This avoids expensive KEYS scans over the entire Redis keyspace (critical for Upstash HTTP-based Redis).
  */
 const DETERMINISTIC_KEYS: Record<string, string[]> = {
-  "/api/users/cart*": ["/api/users/cart", "/api/users/cart/count"],
   "/api/users/profile*": ["/api/users/profile"],
   "/api/users/addresses*": ["/api/users/addresses"],
 };
@@ -86,37 +85,36 @@ const DETERMINISTIC_KEYS: Record<string, string[]> = {
  */
 export const invalidateCache = (pattern: string) => {
   return async (req: AuthRequest, res: Response, next: NextFunction) => {
-    next(); // Proceed to the controller
+    // Invalidate cache BEFORE the controller runs to prevent race conditions.
+    // Previously, invalidation happened async after res.finish, so a quick
+    // GET request could still read stale cached data.
+    try {
+      const userId = req.user?.id || "public";
+      const finalPattern = pattern.replace("{userId}", userId);
 
-    // When the request finishes, if successful, clear the cache
-    res.on("finish", async () => {
-      if (res.statusCode >= 200 && res.statusCode < 400) {
-        try {
-          const userId = req.user?.id || "public";
-          const finalPattern = pattern.replace("{userId}", userId);
+      // Extract the path portion after "cache:{userId}:"
+      const pathPattern = finalPattern.replace(`cache:${userId}:`, "");
+      const knownKeys = DETERMINISTIC_KEYS[pathPattern];
 
-          // Extract the path portion after "cache:{userId}:"
-          const pathPattern = finalPattern.replace(`cache:${userId}:`, "");
-          const knownKeys = DETERMINISTIC_KEYS[pathPattern];
-
-          if (knownKeys) {
-            // Fast path: delete exact keys directly (single HTTP call)
-            const exactKeys = knownKeys.map((k) => `cache:${userId}:${k}`);
-            await redisClient.del(...exactKeys);
-            console.log(`[Cache] DELETED (deterministic): ${exactKeys.join(", ")}`);
-          } else {
-            // Slow fallback: KEYS scan for non-deterministic patterns (e.g., product cache)
-            console.log(`[Cache] INVALIDATING (scan): ${finalPattern}`);
-            const keys = await redisClient.keys(finalPattern);
-            if (keys.length > 0) {
-              await redisClient.del(...keys);
-              console.log(`[Cache] DELETED ${keys.length} keys`);
-            }
-          }
-        } catch (error) {
-          console.error("Redis Cache Invalidation Error:", error);
+      if (knownKeys) {
+        // Fast path: delete exact keys directly (single HTTP call)
+        const exactKeys = knownKeys.map((k) => `cache:${userId}:${k}`);
+        await redisClient.del(...exactKeys);
+        console.log(`[Cache] DELETED (deterministic): ${exactKeys.join(", ")}`);
+      } else {
+        // Slow fallback: KEYS scan for non-deterministic patterns (e.g., product cache)
+        console.log(`[Cache] INVALIDATING (scan): ${finalPattern}`);
+        const keys = await redisClient.keys(finalPattern);
+        if (keys.length > 0) {
+          await redisClient.del(...keys);
+          console.log(`[Cache] DELETED ${keys.length} keys`);
         }
       }
-    });
+    } catch (error) {
+      console.error("Redis Cache Invalidation Error:", error);
+      // Don't block the request if cache invalidation fails
+    }
+
+    next(); // Proceed to the controller
   };
 };

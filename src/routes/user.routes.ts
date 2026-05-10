@@ -126,46 +126,44 @@ router.put(
   UserController.markNotificationRead,
 );
 // ==================== CART ROUTES ====================
+// No Redis caching on cart routes — cart data is user-specific, small, and
+// frequently mutated.  Direct DB queries are already optimized and respond
+// in ~50-100ms, which is faster than adding Upstash HTTP roundtrips for
+// cache get/set/invalidation on every request.
 router.get(
   "/cart",
   authenticateToken,
   authorizeApproved,
-  cacheRoute(300),
   CartController.getCart,
 );
 router.get(
   "/cart/count",
   authenticateToken,
   authorizeApproved,
-  cacheRoute(300),
   CartController.getCartItemCount,
 );
 router.post(
   "/cart/add",
   authenticateToken,
   authorizeApproved,
-  invalidateCache("cache:{userId}:/api/users/cart*"),
   CartController.addToCart,
 );
 router.put(
   "/cart/item/:itemId",
   authenticateToken,
   authorizeApproved,
-  invalidateCache("cache:{userId}:/api/users/cart*"),
   CartController.updateCartItem,
 );
 router.delete(
   "/cart/item/:itemId",
   authenticateToken,
   authorizeApproved,
-  invalidateCache("cache:{userId}:/api/users/cart*"),
   CartController.removeFromCart,
 );
 router.delete(
   "/cart/clear",
   authenticateToken,
   authorizeApproved,
-  invalidateCache("cache:{userId}:/api/users/cart*"),
   CartController.clearCart,
 );
 
