@@ -56,7 +56,11 @@ export class ProductService {
     const cachedProducts = await redisClient.get(cacheKey);
 
     if (cachedProducts) {
-      return cachedProducts;
+      try {
+        return JSON.parse(cachedProducts);
+      } catch (e) {
+        console.error("[Cache] Parsing error for trending products:", e);
+      }
     }
 
     const products = await prisma.product.findMany({
@@ -69,7 +73,7 @@ export class ProductService {
         category: true,
       },
       orderBy: {
-        createdAt: "desc"
+        createdAt: "desc",
       },
     });
 
@@ -78,7 +82,7 @@ export class ProductService {
     await redisClient.setex(
       cacheKey,
       this.CACHE_TTL,
-      formattedProducts,
+      JSON.stringify(formattedProducts),
     );
 
     return formattedProducts;
@@ -92,7 +96,11 @@ export class ProductService {
     const cachedProducts = await redisClient.get(cacheKey);
 
     if (cachedProducts) {
-      return cachedProducts;
+      try {
+        return JSON.parse(cachedProducts);
+      } catch (e) {
+        console.error("[Cache] Parsing error for featured products:", e);
+      }
     }
 
     const products = await prisma.product.findMany({
@@ -114,7 +122,7 @@ export class ProductService {
     await redisClient.setex(
       cacheKey,
       this.CACHE_TTL,
-      formattedProducts,
+      JSON.stringify(formattedProducts),
     );
 
     return formattedProducts;
@@ -174,13 +182,14 @@ export class ProductService {
   ): Promise<{ products: any[]; total: number }> {
     const skip = (page - 1) * limit;
     const cacheKey = `products:new:${page}:${limit}`;
-    const cachedData = await redisClient.get<{
-      products: any[];
-      total: number;
-    }>(cacheKey);
+    const cachedData = await redisClient.get(cacheKey);
 
     if (cachedData) {
-      return cachedData;
+      try {
+        return JSON.parse(cachedData);
+      } catch (e) {
+        console.error("[Cache] Parsing error for new products:", e);
+      }
     }
 
     // Calculate the date 15 days ago
@@ -216,7 +225,7 @@ export class ProductService {
       total,
     };
 
-    await redisClient.setex(cacheKey, this.CACHE_TTL, responseData);
+    await redisClient.setex(cacheKey, this.CACHE_TTL, JSON.stringify(responseData));
 
     return responseData;
   }

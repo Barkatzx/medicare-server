@@ -25,7 +25,12 @@ export const cacheRoute = (ttlSeconds: number) => {
 
       if (cachedData) {
         console.log(`[Cache] HIT: ${key}`);
-        return res.status(200).json(cachedData);
+        try {
+          return res.status(200).json(JSON.parse(cachedData));
+        } catch (e) {
+          // If parsing fails, it might be a plain string
+          return res.status(200).json(cachedData);
+        }
       }
 
       console.log(`[Cache] MISS: ${key}`);
@@ -49,7 +54,8 @@ export const cacheRoute = (ttlSeconds: number) => {
 
       res.json = (body: any) => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          redisClient.setex(key, ttlSeconds, body);
+          const valueToCache = typeof body === "string" ? body : JSON.stringify(body);
+          redisClient.setex(key, ttlSeconds, valueToCache);
         }
         
         // Resolve the in-flight promise and cleanup

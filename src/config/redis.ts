@@ -1,20 +1,33 @@
-import { Redis } from "@upstash/redis";
+import Redis from "ioredis";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-const redisClient = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+const redisClient = new Redis(process.env.REDIS_URL!, {
+  maxRetriesPerRequest: 3,
+  retryStrategy(times) {
+    const delay = Math.min(times * 50, 2000);
+    return delay;
+  },
+});
+
+// Handle connection errors
+redisClient.on("error", (err: any) => {
+  if (err.code === "ENOTFOUND") {
+    console.error(
+      "[Redis] Host not found. If you are running locally, ensure you are using the External Redis URL from Render, not the Internal one.",
+    );
+  } else {
+    console.error("[Redis] Error:", err.message);
+  }
 });
 
 export const connectRedis = async () => {
   try {
-    // Upstash Redis uses HTTP, so we just ping to verify the connection.
-    await redisClient.ping();
-    console.log("Upstash Redis Client Connected");
+    const response = await redisClient.ping();
+    console.log("Redis Client Connected:", response);
   } catch (error) {
-    console.error("Failed to connect to Upstash Redis:", error);
+    console.error("Redis Ping Failed. Continuing without cache...");
   }
 };
 

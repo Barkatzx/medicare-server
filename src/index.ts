@@ -60,7 +60,8 @@ app.listen(PORT, () => {
 process.on("SIGINT", async () => {
   await prisma.$disconnect();
   console.log("Disconnected from database");
-  console.log("Upstash Redis connection is stateless, no disconnect needed");
+  await redisClient.quit();
+  console.log("Disconnected from Redis");
 
   process.exit(0);
 });
