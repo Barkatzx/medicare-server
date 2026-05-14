@@ -15,10 +15,10 @@ const redisClient = new Redis(process.env.REDIS_URL!, {
 redisClient.on("error", (err: any) => {
   if (err.code === "ENOTFOUND") {
     console.error(
-      "[Redis] Host not found. If you are running locally, ensure you are using the External Redis URL from Render, not the Internal one.",
+      "[Redis] Host not found. If you are running locally, ensure you are using the External Redis URL from Render.",
     );
   } else {
-    console.error("[Redis] Error:", err.message);
+    console.error("[Redis] Connection Error:", err);
   }
 });
 
