@@ -30,6 +30,7 @@ router.get(
   "/my-orders/:orderId",
   authenticateToken,
   authorizeApproved,
+  cacheRoute(3600),
   OrderController.getMyOrderById,
 );
 router.put(
@@ -53,6 +54,7 @@ router.get(
   "/:orderId",
   authenticateToken,
   authorizeAdmin,
+  cacheRoute(3600),
   OrderController.getOrderById,
 );
 router.put(

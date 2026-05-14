@@ -864,4 +864,22 @@ export class UserController {
       });
     }
   }
+
+  // Logout user (blacklist token)
+  static async logout(req: AuthRequest, res: Response) {
+    try {
+      const authHeader = req.headers["authorization"];
+      const token = authHeader && authHeader.split(" ")[1];
+
+      if (token) {
+        // Blacklist token for 24 hours
+        await redisClient.setex(`blacklist:${token}`, 86400, "revoked");
+      }
+
+      res.status(200).json({ message: "Logged out successfully" });
+    } catch (error: any) {
+      console.error("Logout error:", error);
+      res.status(500).json({ error: "Failed to logout" });
+    }
+  }
 }
