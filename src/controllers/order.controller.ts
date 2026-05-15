@@ -63,13 +63,11 @@ export class OrderController {
       // Check stock availability and calculate totals with discounts
       let totalAmount = 0;
       let totalOriginalAmount = 0;
-
-      for (const item of cart.items) {
+      
+      // Pre-calculate items data and verify stock
+      const orderItemsData = cart.items.map((item) => {
         if (item.quantity > item.product.stock) {
-          return res.status(400).json({
-            success: false,
-            error: `Insufficient stock for product: ${item.product.name}. Available: ${item.product.stock}`,
-          });
+          throw new Error(`Insufficient stock for product: ${item.product.name}. Available: ${item.product.stock}`);
         }
 
         const originalPrice = Number(item.product.price);
@@ -81,16 +79,26 @@ export class OrderController {
           item.product.discountPercent,
         );
 
-        totalOriginalAmount += originalPrice * item.quantity;
-        totalAmount += finalPrice * item.quantity;
-      }
+        const itemTotal = finalPrice * item.quantity;
+        const itemOriginalTotal = originalPrice * item.quantity;
+        
+        totalAmount += itemTotal;
+        totalOriginalAmount += itemOriginalTotal;
+
+        return {
+          productId: item.productId,
+          quantity: item.quantity,
+          price: Math.round(finalPrice * 100) / 100,
+        };
+      });
 
       // Round totals to 2 decimal places to avoid floating point issues
       totalAmount = Math.round(totalAmount * 100) / 100;
       totalOriginalAmount = Math.round(totalOriginalAmount * 100) / 100;
-      // Create order with transaction with increased timeout for large orders
+
+      // Create order with transaction with significantly increased timeout for massive orders (70-100+ items)
       const result = await prisma.$transaction(async (tx) => {
-        // Create order
+        // Create order with all items in one nested operation
         const order = await tx.order.create({
           data: {
             userId,
@@ -98,22 +106,7 @@ export class OrderController {
             totalAmount,
             status: "pending",
             items: {
-              create: cart.items.map((item) => {
-                const originalPrice = Number(item.product.price);
-                const finalPrice = DiscountService.calculateFinalPrice(
-                  originalPrice,
-                  item.product.discountedPrice
-                    ? Number(item.product.discountedPrice)
-                    : null,
-                  item.product.discountPercent,
-                );
-
-                return {
-                  productId: item.productId,
-                  quantity: item.quantity,
-                  price: Math.round(finalPrice * 100) / 100,
-                };
-              }),
+              create: orderItemsData,
             },
             payment: {
               create: {
@@ -133,7 +126,8 @@ export class OrderController {
           },
         });
 
-        // Update product stock in parallel for better performance
+        // Update product stock in parallel
+        // For large orders, this is the most time-consuming part
         await Promise.all(
           cart.items.map((item) =>
             tx.product.update({
@@ -168,19 +162,29 @@ export class OrderController {
 
         return order;
       }, {
-        timeout: 15000 // 15 seconds timeout for large orders
+        timeout: 30000 // 30 seconds timeout to handle large orders (70-100+ products)
       });
 
-      res.status(201).json({
+      return res.status(201).json({
         success: true,
         data: result,
         message: "Order created successfully",
       });
     } catch (error: any) {
-      console.error("Create order error:", error);
+      console.error("Create order error details:", error);
+      
+      // Handle specific stock error thrown above
+      if (error.message && error.message.startsWith("Insufficient stock")) {
+        return res.status(400).json({
+          success: false,
+          error: error.message,
+        });
+      }
+
       res.status(500).json({
         success: false,
-        error: "Failed to create order",
+        error: "Failed to create order. This might be due to a large number of items. Please try again or contact support.",
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }
