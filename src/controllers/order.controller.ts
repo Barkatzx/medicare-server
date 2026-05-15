@@ -96,7 +96,7 @@ export class OrderController {
       totalAmount = Math.round(totalAmount * 100) / 100;
       totalOriginalAmount = Math.round(totalOriginalAmount * 100) / 100;
 
-      // Create order with transaction with significantly increased timeout for massive orders (70-100+ items)
+      // Create order with transaction with significantly increased timeout for massive orders (up to 500+ items)
       const result = await prisma.$transaction(async (tx) => {
         // Create order with all items in one nested operation
         const order = await tx.order.create({
@@ -126,20 +126,25 @@ export class OrderController {
           },
         });
 
-        // Update product stock in parallel
-        // For large orders, this is the most time-consuming part
-        await Promise.all(
-          cart.items.map((item) =>
-            tx.product.update({
-              where: { id: item.productId },
-              data: {
-                stock: {
-                  decrement: item.quantity,
+        // Update product stock in batches to avoid connection pool exhaustion
+        // and handle large orders (100-500+ products) efficiently
+        // Using a balanced batch size for optimal performance and stability
+        const batchSize = 50;
+        for (let i = 0; i < cart.items.length; i += batchSize) {
+          const batch = cart.items.slice(i, i + batchSize);
+          await Promise.all(
+            batch.map((item) =>
+              tx.product.update({
+                where: { id: item.productId },
+                data: {
+                  stock: {
+                    decrement: item.quantity,
+                  },
                 },
-              },
-            })
-          )
-        );
+              })
+            )
+          );
+        }
 
         // Clear cart
         await tx.cartItem.deleteMany({
@@ -162,7 +167,7 @@ export class OrderController {
 
         return order;
       }, {
-        timeout: 30000 // 30 seconds timeout to handle large orders (70-100+ products)
+        timeout: 300000 // 300 seconds (5 minutes) timeout to handle massive orders (100-500+ products)
       });
 
       return res.status(201).json({
@@ -183,7 +188,7 @@ export class OrderController {
 
       res.status(500).json({
         success: false,
-        error: "Failed to create order. This might be due to a large number of items. Please try again or contact support.",
+        error: "Failed to create order due to heavy processing load. We are processing a large number of items. Please check 'My Orders' in a moment or try again.",
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
