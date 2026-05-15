@@ -84,7 +84,11 @@ export class OrderController {
         totalOriginalAmount += originalPrice * item.quantity;
         totalAmount += finalPrice * item.quantity;
       }
-      // Create order with transaction
+
+      // Round totals to 2 decimal places to avoid floating point issues
+      totalAmount = Math.round(totalAmount * 100) / 100;
+      totalOriginalAmount = Math.round(totalOriginalAmount * 100) / 100;
+      // Create order with transaction with increased timeout for large orders
       const result = await prisma.$transaction(async (tx) => {
         // Create order
         const order = await tx.order.create({
@@ -107,7 +111,7 @@ export class OrderController {
                 return {
                   productId: item.productId,
                   quantity: item.quantity,
-                  price: finalPrice,
+                  price: Math.round(finalPrice * 100) / 100,
                 };
               }),
             },
@@ -129,17 +133,19 @@ export class OrderController {
           },
         });
 
-        // Update product stock
-        for (const item of cart.items) {
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              stock: {
-                decrement: item.quantity,
+        // Update product stock in parallel for better performance
+        await Promise.all(
+          cart.items.map((item) =>
+            tx.product.update({
+              where: { id: item.productId },
+              data: {
+                stock: {
+                  decrement: item.quantity,
+                },
               },
-            },
-          });
-        }
+            })
+          )
+        );
 
         // Clear cart
         await tx.cartItem.deleteMany({
@@ -161,6 +167,8 @@ export class OrderController {
         });
 
         return order;
+      }, {
+        timeout: 15000 // 15 seconds timeout for large orders
       });
 
       res.status(201).json({
@@ -168,7 +176,7 @@ export class OrderController {
         data: result,
         message: "Order created successfully",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Create order error:", error);
       res.status(500).json({
         success: false,
@@ -309,16 +317,19 @@ export class OrderController {
       // Cancel order and restore stock
       const result = await prisma.$transaction(async (tx) => {
         // Restore product stock
-        for (const item of order.items) {
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              stock: {
-                increment: item.quantity,
+        // Restore product stock in parallel
+        await Promise.all(
+          order.items.map((item) =>
+            tx.product.update({
+              where: { id: item.productId },
+              data: {
+                stock: {
+                  increment: item.quantity,
+                },
               },
-            },
-          });
-        }
+            })
+          )
+        );
 
         // Update order status
         const updatedOrder = await tx.order.update({
